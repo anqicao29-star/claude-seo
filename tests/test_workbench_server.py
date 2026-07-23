@@ -130,6 +130,7 @@ class WorkbenchFunctionTests(unittest.TestCase):
         self.assertTrue(result["logged_in"])
         self.assertEqual(result["codex_version"], "codex-cli 1.2.3")
         self.assertEqual(result["login_status"], "Logged in using ChatGPT")
+        self.assertEqual(result["max_sandbox"], server.MAX_SANDBOX)
         self.assertEqual(
             command.call_args_list[0].args[0],
             [server.CODEX_BIN, "--version"],
@@ -182,6 +183,8 @@ class WorkbenchHttpTests(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertIn("application/json", headers["Content-Type"])
         self.assertEqual(json.loads(body), {"error": "未找到接口"})
+        self.assertEqual(headers["X-Frame-Options"], "DENY")
+        self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
 
     def test_chat_rejects_malformed_json(self):
         status, _, body = self.request(
@@ -193,6 +196,49 @@ class WorkbenchHttpTests(unittest.TestCase):
 
         self.assertEqual(status, 400)
         self.assertEqual(json.loads(body), {"error": "请求不是有效 JSON"})
+
+    def test_chat_rejects_non_json_cross_site_and_foreign_host_requests(self):
+        status, _, body = self.request(
+            "POST",
+            "/api/chat",
+            body=b'{"message":"test"}',
+            headers={"Content-Type": "text/plain"},
+        )
+        self.assertEqual(status, 415)
+        self.assertEqual(json.loads(body), {"error": "仅支持 application/json"})
+
+        status, _, body = self.request(
+            "POST",
+            "/api/chat",
+            body=b'{"message":"test"}',
+            headers={
+                "Content-Type": "application/json",
+                "Origin": "https://attacker.example",
+            },
+        )
+        self.assertEqual(status, 403)
+        self.assertEqual(json.loads(body), {"error": "拒绝跨站请求"})
+
+        status, _, body = self.request(
+            "POST",
+            "/api/chat",
+            body=b'{"message":"test"}',
+            headers={
+                "Content-Type": "application/json",
+                "Host": "attacker.example",
+            },
+        )
+        self.assertEqual(status, 403)
+        self.assertEqual(json.loads(body), {"error": "拒绝非本机请求"})
+
+    def test_chat_defaults_to_read_only_server_policy(self):
+        with patch.object(server, "MAX_SANDBOX", "read-only"):
+            status, _, body = self.post_json(
+                {"message": "test", "sandbox": "workspace-write"}
+            )
+
+        self.assertEqual(status, 403)
+        self.assertEqual(json.loads(body), {"error": "服务当前仅允许只读任务"})
 
     def test_chat_rejects_invalid_thread_sandbox_and_skill(self):
         cases = [
@@ -284,14 +330,15 @@ class WorkbenchHttpTests(unittest.TestCase):
             ]
         )
 
-        with patch.object(server.subprocess, "Popen", return_value=process) as popen:
-            status, _, _ = self.post_json(
-                {
-                    "message": "继续",
-                    "thread_id": "thread_123",
-                    "sandbox": "workspace-write",
-                }
-            )
+        with patch.object(server, "MAX_SANDBOX", "workspace-write"):
+            with patch.object(server.subprocess, "Popen", return_value=process) as popen:
+                status, _, _ = self.post_json(
+                    {
+                        "message": "继续",
+                        "thread_id": "thread_123",
+                        "sandbox": "workspace-write",
+                    }
+                )
 
         self.assertEqual(status, 200)
         self.assertEqual(

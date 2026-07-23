@@ -204,6 +204,11 @@ function setRuntime(runtime) {
   const ok = runtime.codex_available && runtime.logged_in;
   $("#runtime").innerHTML = `<i class="dot ${ok ? "ok" : "bad"}"></i><span>${escapeHtml(ok ? `${runtime.codex_version} · ${runtime.model}` : runtime.login_status)}</span>`;
   if (!ok) $("#prompt").placeholder = "Codex 尚未登录，请先在终端运行 codex login";
+  const writeOption = $("#sandbox").querySelector('option[value="workspace-write"]');
+  const writeEnabled = runtime.max_sandbox === "workspace-write";
+  writeOption.disabled = !writeEnabled;
+  writeOption.textContent = writeEnabled ? "允许修改项目文件" : "允许修改项目文件（服务未启用）";
+  if (!writeEnabled && $("#sandbox").value === "workspace-write") $("#sandbox").value = "read-only";
 }
 
 function renderSkills() {

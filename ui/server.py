@@ -28,8 +28,12 @@ DRIFT_DB = HOME / ".cache" / "claude-seo" / "drift" / "baselines.db"
 CODEX_BIN = os.environ.get("CLAUDE_SEO_CODEX_BIN") or shutil.which("codex") or "codex"
 # 当前机器已验证 gpt-5.4 可与已安装 CLI 配合工作；可通过环境变量覆盖。
 CODEX_MODEL = os.environ.get("CLAUDE_SEO_CODEX_MODEL", "gpt-5.4")
+MAX_SANDBOX = os.environ.get("CLAUDE_SEO_MAX_SANDBOX", "read-only")
+if MAX_SANDBOX not in ("read-only", "workspace-write"):
+    MAX_SANDBOX = "read-only"
 MAX_REQUEST_BYTES = 256 * 1024
 MAX_MESSAGE_CHARS = 100_000
+LOCAL_HOST_PATTERN = re.compile(r"\A(?:127\.0\.0\.1|localhost)(?::\d{1,5})?\Z", re.IGNORECASE)
 
 CATEGORIES = {
     "编排": ["seo"],
@@ -169,6 +173,7 @@ def api_runtime():
         "login_status": login.splitlines()[-1] if login else "未登录",
         "model": CODEX_MODEL,
         "workspace": str(PROJECT_DIR),
+        "max_sandbox": MAX_SANDBOX,
     }
 
 
@@ -232,6 +237,20 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(UI_DIR), **kwargs)
 
+    def end_headers(self):
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "connect-src 'self'; object-src 'none'; base-uri 'none'; "
+            "form-action 'none'; frame-ancestors 'none'",
+        )
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        super().end_headers()
+
     def send_json(self, status, payload):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -242,7 +261,21 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def has_allowed_host(self):
+        host = self.headers.get("Host", "").strip()
+        return bool(LOCAL_HOST_PATTERN.fullmatch(host))
+
+    def has_allowed_origin(self):
+        origin = self.headers.get("Origin")
+        if origin is None:
+            return True
+        host = self.headers.get("Host", "").strip()
+        return origin.lower() == f"http://{host}".lower()
+
     def do_GET(self):
+        if not self.has_allowed_host():
+            self.send_json(403, {"error": "拒绝非本机请求"})
+            return
         route = self.path.split("?")[0]
         if route in ROUTES:
             self.send_json(200, ROUTES[route]())
@@ -250,9 +283,19 @@ class Handler(SimpleHTTPRequestHandler):
             super().do_GET()
 
     def do_POST(self):
+        if not self.has_allowed_host():
+            self.send_json(403, {"error": "拒绝非本机请求"})
+            return
         route = self.path.split("?")[0]
         if route != "/api/chat":
             self.send_json(404, {"error": "未找到接口"})
+            return
+        media_type = self.headers.get("Content-Type", "").partition(";")[0].strip().lower()
+        if media_type != "application/json":
+            self.send_json(415, {"error": "仅支持 application/json"})
+            return
+        if not self.has_allowed_origin():
+            self.send_json(403, {"error": "拒绝跨站请求"})
             return
         self.handle_chat()
 
@@ -282,6 +325,9 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if sandbox not in ("read-only", "workspace-write"):
             self.send_json(400, {"error": "不支持的权限模式"})
+            return
+        if sandbox == "workspace-write" and MAX_SANDBOX != "workspace-write":
+            self.send_json(403, {"error": "服务当前仅允许只读任务"})
             return
         if skill:
             skill_path = PROJECT_DIR / "skills" / skill / "SKILL.md"
