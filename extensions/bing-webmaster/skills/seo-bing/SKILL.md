@@ -1,6 +1,6 @@
 ---
 name: seo-bing
-description: Bing Webmaster Tools + IndexNow extension. Microsoft Copilot citations are fed by the Bing index; this skill makes Bing visibility, link data, and IndexNow URL submission first-class.
+description: Bing Webmaster Tools + IndexNow 扩展。Microsoft Copilot 的引用内容来自 Bing 索引；本技能让 Bing 可见度、链接数据和 IndexNow URL 提交成为一等公民。Bing Webmaster Tools, IndexNow, Microsoft Copilot citations.
 metadata:
   version: "2.2.0"
 compatibility: "Requires BING_WEBMASTER_API_KEY and (optionally) INDEXNOW_KEY in ~/.claude/settings.json env. Run extensions/bing-webmaster/install.sh to configure."
@@ -8,40 +8,39 @@ compatibility: "Requires BING_WEBMASTER_API_KEY and (optionally) INDEXNOW_KEY in
 
 # seo-bing
 
-The non-Google indexing surface. Google still rejects IndexNow (per
-Gary Illyes, multiple SOTR episodes 2024-2025), so this skill is
-specifically for **Bing/Yandex/Seznam/Naver indexing** and
-**Microsoft Copilot AI citation** (which pulls from the Bing index).
+非 Google 的索引通道。Google 目前仍拒绝 IndexNow（据 Gary Illyes 在
+2024-2025 年多期 SOTR 节目中所述），因此本技能专门用于
+**Bing/Yandex/Seznam/Naver 索引**以及
+**Microsoft Copilot AI 引用**（其内容取自 Bing 索引）。
 
-## Prerequisites
+## 前置条件
 
-- Run `extensions/bing-webmaster/install.sh` or `install.ps1`.
-- A Bing Webmaster Tools API key.
-- Optional: an IndexNow host key (32+ chars) published at the URL
-  declared as `INDEXNOW_KEY_LOCATION`.
+- 运行 `extensions/bing-webmaster/install.sh` 或 `install.ps1`。
+- 需要一个 Bing Webmaster Tools API key。
+- 可选：一个 IndexNow host key（32 位以上字符），发布在
+  `INDEXNOW_KEY_LOCATION` 声明的 URL 上。
 
-## Routing
+## 路由
 
-| Command | Underlying script |
+| 命令 | 底层脚本 |
 |---|---|
 | `/seo bing links <url>` | `python3 scripts/bing_webmaster.py links <url>` |
 | `/seo bing compare <urlA> <urlB>` | `python3 scripts/bing_webmaster.py compare <urlA> <urlB>` |
-| `/seo bing submit <url>` (single URL) | `python3 scripts/indexnow_submit.py --host ... --urls <url>` |
+| `/seo bing submit <url>`（单个 URL） | `python3 scripts/indexnow_submit.py --host ... --urls <url>` |
 | `/seo bing submit-batch <file>` | `python3 scripts/indexnow_submit.py --urls-file <file>` |
 | `/seo bing verify-indexnow` | `python3 scripts/indexnow_submit.py --verify-only` |
 
-## When this skill applies
+## 适用场景
 
-- The user is publishing new pages and wants Microsoft Copilot
-  citation eligibility (Bing index ingestion).
-- The user wants to nudge Bing/Yandex/Seznam/Naver indexing for fresh
-  URLs.
-- The user is doing competitor backlink analysis and wants Bing's
-  unique link data (Bing tracks links Google's API doesn't surface).
+- 用户正在发布新页面，希望获得 Microsoft Copilot 的引用资格
+  （即被 Bing 索引收录）。
+- 用户希望推动 Bing/Yandex/Seznam/Naver 对新 URL 的索引。
+- 用户正在做竞争对手外链分析，需要 Bing 独有的链接数据（Bing
+  追踪的一些链接是 Google API 不会呈现的）。
 
-## Cross-skill delegation
+## 跨技能委派
 
-- For Google indexing (very different model — sitemap-driven, no
-  IndexNow), use `seo-google indexing`.
-- For multi-source backlink confidence weighting, fall back to
-  `seo-backlinks` which already integrates Bing + Moz + CC.
+- 对于 Google 索引（模型完全不同——依赖站点地图驱动，不涉及
+  IndexNow），使用 `seo-google indexing`。
+- 需要多来源外链置信度加权时，回退到已整合 Bing + Moz + CC 的
+  `seo-backlinks`。

@@ -1,10 +1,10 @@
 ---
 name: seo-hreflang
 description: >
-  Hreflang and international SEO audit, validation, and generation. Detects
-  common mistakes, validates language/region codes, and generates correct
-  hreflang implementations. Use when user says "hreflang", "i18n SEO",
-  "international SEO", "multi-language", "multi-region", or "language tags".
+  hreflang 与国际化 SEO 的审查、校验与生成工具，检测常见错误，校验语言/地区代码，
+  并生成正确的 hreflang 实现方案。当用户提到"hreflang"、"国际化 SEO"、"多语言"、
+  "多地区网站"、"语言标签"，或说 "hreflang", "i18n SEO", "international SEO",
+  "multi-language", "multi-region", "language tags" 时使用本技能。
 user-invocable: true
 argument-hint: "[url]"
 license: MIT
@@ -14,82 +14,81 @@ metadata:
   category: seo
 ---
 
-# Hreflang & International SEO
+# Hreflang 与国际化 SEO
 
-Validate existing hreflang implementations or generate correct hreflang tags
-for multi-language and multi-region sites. Supports HTML, HTTP header, and
-XML sitemap implementations.
+校验现有站点的 hreflang 实现，或为多语言、多地区站点生成正确的 hreflang 标签。
+支持 HTML、HTTP 响应头和 XML 站点地图三种实现方式。
 
-## Validation Checks
+## 校验项
 
-### 1. Self-Referencing Tags
-- Every page must include an hreflang tag pointing to itself
-- The self-referencing URL must exactly match the page's canonical URL
-- Missing self-referencing tags cause Google to ignore the entire hreflang set
+### 1. 自我引用标签（Self-Referencing Tags）
+- 每个页面都必须包含一个指向自身的 hreflang 标签
+- 自我引用的 URL 必须与该页面的 canonical URL 完全一致
+- 缺少自我引用标签会导致 Google 忽略整组 hreflang 设置
 
-### 2. Return Tags
-- If page A links to page B with hreflang, page B must link back to page A
-- Every hreflang relationship must be bidirectional (A→B and B→A)
-- Missing return tags invalidate the hreflang signal for both pages
-- Check all language versions reference each other (full mesh)
+### 2. 回链标签（Return Tags）
+- 如果页面 A 通过 hreflang 链接到页面 B，页面 B 也必须回链到页面 A
+- 每一组 hreflang 关系都必须是双向的（A→B 且 B→A）
+- 缺少回链标签会使两个页面的 hreflang 信号都失效
+- 检查所有语言版本是否互相引用（形成完整的网状结构）
 
-### 3. x-default Tag
-- Required: designates the fallback page for unmatched languages/regions
-- Typically points to the language selector page or English version
-- Only one x-default per set of alternates
-- Must also have return tags from all other language versions
+### 3. x-default 标签
+- 必需项：用于指定未匹配到语言/地区时的回退页面
+- 通常指向语言选择页或英文版本
+- 每组备用语言中只能有一个 x-default
+- 其他所有语言版本也必须回链到该 x-default 页面
 
-### 4. Language Code Validation
-- Must use ISO 639-1 two-letter codes (e.g., `en`, `fr`, `de`, `ja`)
-- Common errors:
-  - `eng` instead of `en` (ISO 639-2, not valid for hreflang)
-  - `jp` instead of `ja` (incorrect code for Japanese)
-  - `zh` without region qualifier (ambiguous; use `zh-Hans` or `zh-Hant`)
+### 4. 语言代码校验
+- 必须使用 ISO 639-1 双字母代码（例如 `en`、`fr`、`de`、`ja`）
+- 常见错误：
+  - 用 `eng` 代替 `en`（这是 ISO 639-2 代码，hreflang 不支持）
+  - 用 `jp` 代替 `ja`（日语的正确代码是 `ja`）
+  - `zh` 未加地区限定（含义不明确，应使用 `zh-Hans` 或 `zh-Hant`）
 
-### 5. Region Code Validation
-- Optional region qualifier uses ISO 3166-1 Alpha-2 (e.g., `en-US`, `en-GB`, `pt-BR`)
-- Format: `language-REGION` (lowercase language, uppercase region)
-- Common errors:
-  - `en-uk` instead of `en-GB` (UK is not a valid ISO 3166-1 code)
-  - `es-LA` (Latin America is not a country; use specific countries)
-  - Region without language prefix
+### 5. 地区代码校验
+- 可选的地区限定符使用 ISO 3166-1 Alpha-2 代码（例如 `en-US`、`en-GB`、`pt-BR`）
+- 格式为 `language-REGION`（语言小写，地区大写）
+- 常见错误：
+  - 用 `en-uk` 代替 `en-GB`（UK 不是有效的 ISO 3166-1 代码）
+  - `es-LA`（拉丁美洲不是一个国家，应使用具体国家代码）
+  - 地区代码缺少语言前缀
 
-### 6. Canonical URL Alignment
-- Hreflang tags must only appear on canonical URLs
-- If a page has `rel=canonical` pointing elsewhere, hreflang on that page is ignored
-- The canonical URL and hreflang URL must match exactly (including trailing slashes)
-- Non-canonical pages should not be in any hreflang set
+### 6. Canonical URL 一致性
+- hreflang 标签只能出现在 canonical URL 上
+- 如果页面的 `rel=canonical` 指向其他 URL，该页面上的 hreflang 会被忽略
+- canonical URL 与 hreflang URL 必须完全一致（包括末尾斜杠）
+- 非 canonical 页面不应出现在任何 hreflang 集合中
 
-### 7. Protocol Consistency
-- All URLs in an hreflang set must use the same protocol (HTTPS or HTTP)
-- Mixed HTTP/HTTPS in hreflang sets causes validation failures
-- After HTTPS migration, update all hreflang tags to HTTPS
+### 7. 协议一致性
+- 同一组 hreflang 中的所有 URL 必须使用相同协议（HTTPS 或 HTTP）
+- 混用 HTTP/HTTPS 会导致校验失败
+- 迁移到 HTTPS 后，需要同步更新所有 hreflang 标签为 HTTPS
 
-### 8. Cross-Domain Support
-- Hreflang works across different domains (e.g., example.com and example.de)
-- Cross-domain hreflang requires return tags on both domains
-- Verify both domains are verified in Google Search Console
-- Sitemap-based implementation recommended for cross-domain setups
+### 8. 跨域支持
+- hreflang 支持跨不同域名使用（例如 example.com 与 example.de）
+- 跨域 hreflang 需要两个域名都设置回链标签
+- 确认两个域名都已在 Google Search Console 完成验证
+- 跨域场景建议采用基于站点地图的实现方式
 
-## Common Mistakes
+## 常见错误汇总
 
-| Issue | Severity | Fix |
+| 问题 | 严重程度 | 修复方式 |
 |-------|----------|-----|
-| Missing self-referencing tag | Critical | Add hreflang pointing to same page URL |
-| Missing return tags (A→B but no B→A) | Critical | Add matching return tags on all alternates |
-| Missing x-default | High | Add x-default pointing to fallback/selector page |
-| Invalid language code (e.g., `eng`) | High | Use ISO 639-1 two-letter codes |
-| Invalid region code (e.g., `en-uk`) | High | Use ISO 3166-1 Alpha-2 codes |
-| Hreflang on non-canonical URL | High | Move hreflang to canonical URL only |
-| HTTP/HTTPS mismatch in URLs | Medium | Standardize all URLs to HTTPS |
-| Trailing slash inconsistency | Medium | Match canonical URL format exactly |
-| Hreflang in both HTML and sitemap | Low | Choose one method (sitemap preferred for large sites) |
-| Language without region when needed | Low | Add region qualifier for geo-targeted content |
+| 缺少自我引用标签 | 严重 | 添加指向页面自身 URL 的 hreflang |
+| 缺少回链标签（A→B 但无 B→A） | 严重 | 在所有备用语言页面上添加对应的回链标签 |
+| 缺少 x-default | 高 | 添加指向回退页/语言选择页的 x-default |
+| 语言代码无效（如 `eng`） | 高 | 使用 ISO 639-1 双字母代码 |
+| 地区代码无效（如 `en-uk`） | 高 | 使用 ISO 3166-1 Alpha-2 代码 |
+| hreflang 出现在非 canonical URL 上 | 高 | 将 hreflang 仅保留在 canonical URL 上 |
+| URL 协议混用 HTTP/HTTPS | 中 | 统一所有 URL 为 HTTPS |
+| 末尾斜杠不一致 | 中 | 与 canonical URL 格式保持完全一致 |
+| HTML 与站点地图中同时存在 hreflang | 低 | 二选一实现（大型站点建议使用站点地图） |
+| 需要地区限定却只用了语言代码 | 低 | 针对地域定向内容补充地区限定符 |
 
-## Implementation Methods
+## 实现方式
 
-### Method 1: HTML Link Tags
-Best for: Sites with <50 language/region variants per page.
+### 方式一：HTML Link 标签
+适用场景：每个页面语言/地区变体少于 50 个的站点。
 
 ```html
 <link rel="alternate" hreflang="en-US" href="https://example.com/page" />
@@ -98,10 +97,10 @@ Best for: Sites with <50 language/region variants per page.
 <link rel="alternate" hreflang="x-default" href="https://example.com/page" />
 ```
 
-Place in `<head>` section. Every page must include all alternates including itself.
+放置在 `<head>` 区块中。每个页面都必须包含全部备用语言版本（含自身）。
 
-### Method 2: HTTP Headers
-Best for: Non-HTML files (PDFs, documents).
+### 方式二：HTTP 响应头
+适用场景：非 HTML 文件（PDF、文档等）。
 
 ```
 Link: <https://example.com/page>; rel="alternate"; hreflang="en-US",
@@ -109,34 +108,34 @@ Link: <https://example.com/page>; rel="alternate"; hreflang="en-US",
       <https://example.com/page>; rel="alternate"; hreflang="x-default"
 ```
 
-Set via server configuration or CDN rules.
+通过服务器配置或 CDN 规则设置。
 
-### Method 3: XML Sitemap (Recommended for large sites)
-Best for: Sites with many language variants, cross-domain setups, or 50+ pages.
+### 方式三：XML 站点地图（推荐用于大型站点）
+适用场景：语言变体较多、涉及跨域，或页面数超过 50 个的站点。
 
-See Hreflang Sitemap Generation section below.
+详见下方的「Hreflang 站点地图生成」章节。
 
-### Method Comparison
-| Method | Best For | Pros | Cons |
+### 三种方式对比
+| 方式 | 适用场景 | 优点 | 缺点 |
 |--------|----------|------|------|
-| HTML link tags | Small sites (<50 variants) | Easy to implement, visible in source | Bloats `<head>`, hard to maintain at scale |
-| HTTP headers | Non-HTML files | Works for PDFs, images | Complex server config, not visible in HTML |
-| XML sitemap | Large sites, cross-domain | Scalable, centralized management | Not visible on page, requires sitemap maintenance |
+| HTML link 标签 | 小型站点（少于 50 个变体） | 实现简单，源码中可见 | `<head>` 会变臃肿，规模化后难维护 |
+| HTTP 响应头 | 非 HTML 文件 | 适用于 PDF、图片等 | 服务器配置较复杂，HTML 中不可见 |
+| XML 站点地图 | 大型站点、跨域场景 | 可扩展、集中管理 | 页面上不可见，需要维护站点地图 |
 
-## Hreflang Generation
+## Hreflang 生成流程
 
-### Process
-1. **Detect languages**: Scan site for language indicators (URL path, subdomain, TLD, HTML lang attribute)
-2. **Map page equivalents**: Match corresponding pages across languages/regions
-3. **Validate language codes**: Verify all codes against ISO 639-1 and ISO 3166-1
-4. **Generate tags**: Create hreflang tags for each page including self-referencing
-5. **Verify return tags**: Confirm all relationships are bidirectional
-6. **Add x-default**: Set fallback for each page set
-7. **Output**: Generate implementation code (HTML, HTTP headers, or sitemap XML)
+### 处理流程
+1. **检测语言**：扫描站点中的语言标识（URL 路径、子域名、TLD、HTML lang 属性）
+2. **映射对应页面**：匹配不同语言/地区版本下的对应页面
+3. **校验语言代码**：依据 ISO 639-1 和 ISO 3166-1 逐一核对所有代码
+4. **生成标签**：为每个页面生成 hreflang 标签（含自我引用）
+5. **核实回链标签**：确认所有关系均为双向
+6. **添加 x-default**：为每组页面设置回退版本
+7. **输出**：生成实现代码（HTML、HTTP 响应头或站点地图 XML）
 
-## Hreflang Sitemap Generation
+## Hreflang 站点地图生成
 
-### Sitemap with Hreflang
+### 带 Hreflang 的站点地图
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
@@ -158,98 +157,96 @@ See Hreflang Sitemap Generation section below.
 </urlset>
 ```
 
-Key rules:
-- Include the `xmlns:xhtml` namespace declaration
-- Every `<url>` entry must include ALL language alternates (including itself)
-- Each alternate must appear as a separate `<url>` entry with its own full set
-- Split at 50,000 URLs per sitemap file
+关键规则：
+- 必须声明 `xmlns:xhtml` 命名空间
+- 每个 `<url>` 条目都必须包含全部语言版本（含自身）
+- 每个语言版本都要作为独立的 `<url>` 条目出现，并携带完整的一组标签
+- 每个站点地图文件按 50,000 条 URL 拆分
 
-## Output
+## 输出
 
-### Hreflang Validation Report
+### Hreflang 校验报告
 
-#### Summary
-- Total pages scanned: XX
-- Language variants detected: XX
-- Issues found: XX (Critical: X, High: X, Medium: X, Low: X)
+#### 概览
+- 扫描页面总数：XX
+- 检测到的语言变体数：XX
+- 发现问题数：XX（严重：X，高：X，中：X，低：X）
 
-#### Validation Results
-| Language | URL | Self-Ref | Return Tags | x-default | Status |
+#### 校验结果
+| 语言 | URL | 自我引用 | 回链标签 | x-default | 状态 |
 |----------|-----|----------|-------------|-----------|--------|
 | en-US | https://... | ✅ | ✅ | ✅ | ✅ |
 | fr | https://... | ❌ | ⚠️ | ✅ | ❌ |
 | de | https://... | ✅ | ❌ | ✅ | ❌ |
 
-### Generated Hreflang Tags
-- HTML `<link>` tags (if HTML method chosen)
-- HTTP header values (if header method chosen)
-- `hreflang-sitemap.xml` (if sitemap method chosen)
+### 生成的 Hreflang 标签
+- HTML `<link>` 标签（若选择 HTML 方式）
+- HTTP 响应头值（若选择响应头方式）
+- `hreflang-sitemap.xml`（若选择站点地图方式）
 
-### Recommendations
-- Missing implementations to add
-- Incorrect codes to fix
-- Method migration suggestions (e.g., HTML to sitemap for scale)
+### 建议
+- 需要补充的缺失实现
+- 需要修正的错误代码
+- 实现方式迁移建议（例如站点规模扩大后从 HTML 迁移到站点地图）
 
-## Cultural Adaptation Assessment
+## 文化适配评估
 
-When analyzing a multi-language site, go beyond technical hreflang validation to assess
-whether the content is culturally adapted for each target market.
+分析多语言站点时，不能只停留在 hreflang 技术校验层面，还要评估内容是否针对每个目标市场做了文化适配。
 
-Load `references/cultural-profiles.md` for pre-built profiles (DACH, Francophone, Hispanic, Japanese).
+加载 `references/cultural-profiles.md` 获取预置的文化画像（DACH 德语区、法语区、西语区、日本市场）。
 
-**Assessment steps:**
-1. Identify all language versions and their target markets
-2. Load the relevant cultural profile(s)
-3. Check CTAs match cultural expectations (direct vs indirect)
-4. Check trust signals are locale-appropriate (certifications, legal pages)
-5. Check for foreign brand references on localized pages
-6. Check number/date/currency formatting consistency
-7. Flag cultural adaptation issues as Medium severity
+**评估步骤：**
+1. 确认所有语言版本及其目标市场
+2. 加载相应的文化画像
+3. 检查 CTA 是否符合当地文化预期（直接型 vs 含蓄型）
+4. 检查信任信号是否符合当地习惯（资质认证、法律页面等）
+5. 检查本地化页面上是否出现不相关的境外品牌引用
+6. 检查数字、日期、货币格式是否一致
+7. 将文化适配问题标记为中等严重程度
 
-**Output:** Cultural Adaptation Score per language version (0-100) with specific findings.
+**输出：** 每个语言版本的文化适配得分（0-100），并附具体发现。
 
-## Content Parity Audit
+## 内容一致性（Parity）审查
 
-**Command:** `/seo hreflang audit <directory-or-url>`
+**命令：** `/seo hreflang audit <directory-or-url>`
 
-Audit content parity across all language versions of a site or local content directory.
+对站点或本地内容目录中所有语言版本之间的内容一致性进行审查。
 
-Load `references/content-parity.md` for the full parity matrix and scoring methodology.
+加载 `references/content-parity.md` 获取完整的一致性矩阵与评分方法。
 
-**What it checks:**
-- Page existence across all declared languages
-- Section structure equivalence (H2/H3 count)
-- SEO element parity (title, meta, schema localization)
-- Word count ratio validation (DE should be 25-35% longer than EN, JA 10-25% shorter)
-- Freshness tracking (stale translations detected via timestamps)
-- Cultural marker scanning (foreign brands, wrong legal references, untranslated elements)
+**检查内容：**
+- 各声明语言版本的页面是否都存在
+- 各版本章节结构是否对等（H2/H3 数量）
+- SEO 元素一致性（标题、meta、schema 本地化）
+- 字数比例校验（德语通常应比英语长 25-35%，日语应短 10-25%）
+- 时效性追踪（通过时间戳检测过期翻译）
+- 文化标记扫描（境外品牌、错误的法律引用、未翻译的元素）
 
-**Output:** Parity matrix table with per-page scores and prioritized action items.
+**输出：** 一致性矩阵表，含各页面得分及优先行动项。
 
-## Locale Format Validation
+## 本地化格式校验
 
-Load `references/locale-formats.md` for number, date, currency, address, and phone format
-reference tables per locale.
+加载 `references/locale-formats.md` 获取各地区的数字、日期、货币、地址、电话格式参考表。
 
-**Checks:**
-- Number format consistency (e.g., "1,000.00" should be "1.000,00" on de-DE pages)
-- Date format matches locale expectations
-- Currency symbols and placement correct for target market
-- Phone numbers use international format with correct country code
+**检查项：**
+- 数字格式一致性（例如 de-DE 页面上 "1,000.00" 应写作 "1.000,00"）
+- 日期格式是否符合当地习惯
+- 货币符号及位置是否符合目标市场规范
+- 电话号码是否使用带正确国家代码的国际格式
 
-## Reference Files
+## 参考文件
 
-Load on-demand as needed (do NOT load all at startup):
-- `references/cultural-profiles.md`: DACH, Francophone, Hispanic, Japanese cultural adaptation profiles
-- `references/locale-formats.md`: Number, date, currency, address, phone format tables per locale
-- `references/content-parity.md`: Content parity audit methodology and scoring
+按需加载（不要在启动时全部加载）：
+- `references/cultural-profiles.md`：DACH 德语区、法语区、西语区、日本市场的文化适配画像
+- `references/locale-formats.md`：各地区的数字、日期、货币、地址、电话格式对照表
+- `references/content-parity.md`：内容一致性审查方法与评分标准
 
-## Error Handling
+## 错误处理
 
-| Scenario | Action |
+| 场景 | 处理方式 |
 |----------|--------|
-| URL unreachable (DNS failure, connection refused) | Report the error clearly. Do not guess site structure. Suggest the user verify the URL and try again. |
-| No hreflang tags found | Report the absence. Check for other internationalization signals (subdirectories, subdomains, ccTLDs) and recommend the appropriate hreflang implementation method. |
-| Invalid language/region codes detected | List each invalid code with the correct replacement. Provide a corrected hreflang tag set ready to implement. |
-| Cultural profile not available for language | Use the Default Profile checklist from cultural-profiles.md. Note that assessment is based on general guidelines, not a pre-built profile. |
-| Content parity directory empty | Report that no content files were found. Suggest verifying the directory path or providing a URL for live site analysis. |
+| URL 无法访问（DNS 失败、连接被拒绝） | 明确报告错误，不要臆测站点结构，建议用户核实 URL 后重试。 |
+| 未发现任何 hreflang 标签 | 报告该情况，检查其他国际化信号（子目录、子域名、ccTLD），并推荐合适的 hreflang 实现方式。 |
+| 检测到无效的语言/地区代码 | 逐条列出无效代码及正确替换值，提供可直接实施的修正版 hreflang 标签集。 |
+| 该语言没有对应的文化画像 | 使用 cultural-profiles.md 中的默认画像清单，并注明该评估基于通用准则而非预置画像。 |
+| 内容一致性审查目录为空 | 报告未找到内容文件，建议核实目录路径，或改为提供 URL 进行线上站点分析。 |

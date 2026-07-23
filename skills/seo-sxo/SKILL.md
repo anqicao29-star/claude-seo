@@ -1,12 +1,14 @@
 ---
 name: seo-sxo
 description: >
-  Search Experience Optimization: reads Google SERPs backwards to detect page-type
-  mismatches, derives user stories from search intent signals, and scores pages
-  from multiple persona perspectives. Identifies why well-optimized pages fail
-  to rank by analyzing what Google rewards for each keyword. Use when user says
-  "SXO", "search experience", "page type mismatch", "SERP analysis", "user story",
-  "persona scoring", "why isn't my page ranking", "intent mismatch", or "wireframe".
+  搜索体验优化（Search Experience Optimization，SXO）：反向拆解 Google SERP，
+  识别页面类型与搜索意图不匹配的问题，从搜索意图信号中推导用户故事，并从多个
+  用户角色（persona）视角为页面打分。通过分析 Google 针对每个关键词真正奖励
+  什么内容，找出「明明优化到位却排名上不去」的根本原因。当用户提到"SXO"、
+  "搜索体验优化"、"页面类型不匹配"、"SERP 分析"、"用户故事"、"角色打分"、
+  "为什么排名上不去"、"意图不匹配"、"线框图"，或说 "SXO", "search experience",
+  "page type mismatch", "SERP analysis", "user story", "persona scoring",
+  "why isn't my page ranking", "intent mismatch", "wireframe" 时使用本技能。
 user-invocable: true
 argument-hint: "<url> [keyword]"
 license: MIT
@@ -17,97 +19,96 @@ metadata:
   category: seo
 ---
 
-# Search Experience Optimization (SXO)
+# 搜索体验优化（SXO）
 
-SXO bridges the gap between SEO (what Google rewards) and UX (what users need).
-Traditional SEO audits check technical health. SXO asks: "Does this page deserve
-to rank for this keyword based on what Google is actually rewarding in the SERP?"
+SXO 弥合了 SEO（Google 奖励什么）与 UX（用户需要什么）之间的鸿沟。传统的 SEO
+审查只检查技术健康度，而 SXO 追问的是："基于 Google 在 SERP 中实际奖励的内容，
+这个页面配不配对这个关键词有排名？"
 
-## Core Insight
+## 核心洞察
 
-A page can score 95/100 on technical SEO and still fail to rank because it is the
-**wrong page type** for the keyword. If Google shows 8 product pages and 2 comparison
-pages for your keyword, your blog post will never break through -- no matter how
-well-optimized it is.
+一个页面即便技术 SEO 得分高达 95/100，也可能因为它是这个关键词的**错误页面类型**
+而排不上去。如果 Google 针对你的关键词展示了 8 个产品页和 2 个对比页，你的博客
+文章无论优化得多好，都很难冲进去。
 
-## Commands
+## 命令
 
-| Command | Purpose |
+| 命令 | 用途 |
 |---------|---------|
-| `/seo sxo <url>` | Full SXO analysis (auto-detect keyword from page) |
-| `/seo sxo <url> <keyword>` | Full SXO analysis for a specific keyword |
-| `/seo sxo wireframe <url>` | Generate IST/SOLL wireframe with concrete placeholders |
-| `/seo sxo personas <url>` | Persona-only scoring (skip SERP analysis) |
+| `/seo sxo <url>` | 完整 SXO 分析（自动从页面识别关键词） |
+| `/seo sxo <url> <keyword>` | 针对指定关键词的完整 SXO 分析 |
+| `/seo sxo wireframe <url>` | 生成带具体占位内容的 IST/SOLL 线框图 |
+| `/seo sxo personas <url>` | 仅执行角色打分（跳过 SERP 分析） |
 
-## Execution Pipeline
+## 执行流程
 
-### Step 1: Target Acquisition
+### 第 1 步：目标获取
 
-1. Fetch the target URL via `scripts/render_page.py --mode auto` (SPA-aware and SSRF-safe)
-2. Parse with `scripts/parse_html.py` to extract: title, H1, meta description,
-   headings hierarchy, word count, schema markup, CTAs, media elements
-3. If no keyword provided, extract primary keyword from title tag + H1 overlap
-4. Validate keyword is non-empty before proceeding
+1. 通过 `scripts/render_page.py --mode auto` 抓取目标 URL（支持 SPA 感知，且具备 SSRF 防护）
+2. 使用 `scripts/parse_html.py` 解析，提取：标题、H1、meta 描述、
+   标题层级结构、字数、schema 标记、CTA、媒体元素
+3. 若未提供关键词，从 title 标签与 H1 的重叠内容中提取主关键词
+4. 继续之前先校验关键词非空
 
-### Step 2: SERP Backwards Analysis
+### 第 2 步：SERP 反向分析
 
-Read `references/page-type-taxonomy.md` for classification rules.
+阅读 `references/page-type-taxonomy.md` 了解分类规则。
 
-1. Search Google for the target keyword (WebSearch)
-2. For each of the top 10 organic results, record:
-   - URL and domain authority tier (brand / niche authority / unknown)
-   - Page type (classify using taxonomy)
-   - Content format (long-form, listicle, how-to, comparison, tool, video)
-   - Word count estimate (from snippet length and page structure)
-   - Schema types present (from SERP features: ratings, FAQ, HowTo)
-   - Media signals (video carousel, image pack, thumbnail presence)
-3. Record SERP features present:
-   - Featured snippet (paragraph / list / table / video)
-   - People Also Ask (extract all visible questions)
-   - Ads (top and bottom -- count and analyze ad copy themes)
-   - Related searches (extract all)
-   - Knowledge panel / local pack / shopping results
-   - AI Overview presence and source types
-4. Calculate SERP consensus:
-   - Dominant page type (>60% = strong consensus, 40-60% = mixed, <40% = fragmented)
-   - Content depth expectations (average word count tier)
-   - Schema expectation (most common structured data types)
-   - Media expectations (video required? images critical?)
+1. 针对目标关键词做 Google 搜索（WebSearch）
+2. 对自然搜索结果前 10 名中的每一条，记录：
+   - URL 及域名权威度等级（品牌 / 细分领域权威站 / 未知）
+   - 页面类型（依据分类体系判定）
+   - 内容形式（长文、清单体、how-to、对比、工具、视频）
+   - 字数估算（基于摘要长度与页面结构）
+   - 出现的 schema 类型（来自 SERP 特性：评分、FAQ、HowTo）
+   - 媒体信号（视频轮播、图片包、缩略图出现情况）
+3. 记录 SERP 中出现的特性：
+   - 精选摘要（Featured Snippet，段落 / 列表 / 表格 / 视频形式）
+   - People Also Ask（提取所有可见问题）
+   - 广告（顶部与底部——统计数量并分析广告文案主题）
+   - 相关搜索（全部提取）
+   - 知识图谱 / 本地结果包 / 购物结果
+   - AI Overview 的出现情况及信息来源类型
+4. 计算 SERP 共识：
+   - 主导页面类型（占比 >60% 为强共识，40-60% 为混合型，<40% 为分散型）
+   - 内容深度预期（平均字数区间）
+   - schema 预期（最常见的结构化数据类型）
+   - 媒体预期（是否必须有视频？图片是否关键？）
 
-### Step 3: Page-Type Mismatch Detection
+### 第 3 步：页面类型不匹配检测
 
-This is the core SXO insight. Compare target page type against SERP consensus.
+这是 SXO 的核心洞察。将目标页面类型与 SERP 共识进行对比。
 
-**Mismatch severity levels:**
+**不匹配的严重程度分级：**
 
-| Target Type | SERP Expects | Severity | Recommendation |
+| 目标页面类型 | SERP 期望类型 | 严重程度 | 建议 |
 |-------------|-------------|----------|----------------|
-| Blog Post | Product Pages | CRITICAL | Create dedicated product page |
-| Blog Post | Comparison | HIGH | Restructure as comparison with matrix |
-| Product | Informational | HIGH | Add educational content layer |
-| Landing Page | Tool/Calculator | HIGH | Build interactive tool component |
-| Service Page | Local Results | MEDIUM | Add location signals + local schema |
-| Any type match | - | ALIGNED | Focus on content depth and UX |
+| 博客文章 | 产品页 | 严重 | 创建专门的产品页 |
+| 博客文章 | 对比内容 | 高 | 改造为带对比矩阵的对比页 |
+| 产品页 | 信息型内容 | 高 | 增加教育性内容层 |
+| 落地页 | 工具/计算器 | 高 | 构建交互式工具组件 |
+| 服务页 | 本地结果 | 中 | 增加位置信号与本地 schema |
+| 类型匹配 | - | 一致 | 聚焦内容深度与用户体验 |
 
-**Classification rules:**
-- Classify target page using `references/page-type-taxonomy.md`
-- Classify each SERP result using the same taxonomy
-- Flag mismatch if target type differs from SERP dominant type
-- If SERP is fragmented (no dominant type), note opportunity for differentiation
+**分类规则：**
+- 依据 `references/page-type-taxonomy.md` 对目标页面进行分类
+- 使用同一套分类体系对每个 SERP 结果进行分类
+- 若目标类型与 SERP 主导类型不同，则标记为不匹配
+- 若 SERP 呈分散型（没有主导类型），记录这是差异化的机会
 
-### Step 4: User Story Derivation
+### 第 4 步：用户故事推导
 
-Read `references/user-story-framework.md` for the full framework.
+阅读 `references/user-story-framework.md` 了解完整框架。
 
-From SERP signals, derive user stories:
+从 SERP 信号中推导用户故事：
 
-1. **PAA questions** reveal knowledge gaps and concerns
-2. **Ad copy themes** reveal commercial triggers and value propositions
-3. **Related searches** reveal the search journey (what comes before/after)
-4. **Featured snippet format** reveals the expected answer structure
-5. **AI Overview** reveals what Google considers the definitive answer
+1. **PAA 问题**揭示知识盲区与顾虑
+2. **广告文案主题**揭示商业触发点与价值主张
+3. **相关搜索**揭示搜索路径（用户在此之前/之后会搜什么）
+4. **精选摘要格式**揭示预期的答案结构
+5. **AI Overview** 揭示 Google 认定的权威答案
 
-For each signal cluster, generate a user story:
+针对每组信号簇，生成一条用户故事：
 ```
 As a [persona derived from signal],
 I want to [goal derived from query intent],
@@ -115,88 +116,88 @@ because [emotional driver from ad copy / PAA tone],
 but I'm blocked by [barrier derived from PAA questions / related searches].
 ```
 
-Generate 3-5 user stories covering the primary intent angles.
+生成 3-5 条覆盖主要意图角度的用户故事。
 
-### Step 5: Gap Analysis
+### 第 5 步：差距分析
 
-Compare the target page against SERP expectations across 7 dimensions:
+从 7 个维度将目标页面与 SERP 预期进行对比：
 
-| Dimension | What to Compare | Score |
+| 维度 | 对比内容 | 分值 |
 |-----------|----------------|-------|
-| Page Type | Target type vs SERP dominant type | 0-15 |
-| Content Depth | Word count, heading depth, topic coverage | 0-15 |
-| UX Signals | CTA clarity, above-fold content, mobile layout | 0-15 |
-| Schema Markup | Present vs expected structured data types | 0-15 |
-| Media Richness | Images, video, interactive elements vs SERP norm | 0-15 |
-| Authority Signals | E-E-A-T markers, social proof, credentials | 0-15 |
-| Freshness | Last updated, date signals, content recency | 0-10 |
+| 页面类型 | 目标类型 vs SERP 主导类型 | 0-15 |
+| 内容深度 | 字数、标题层级深度、话题覆盖度 | 0-15 |
+| UX 信号 | CTA 清晰度、首屏内容、移动端布局 | 0-15 |
+| Schema 标记 | 现有 vs 预期的结构化数据类型 | 0-15 |
+| 媒体丰富度 | 图片、视频、交互元素相对 SERP 常态的水平 | 0-15 |
+| 权威信号 | E-E-A-T 标记、社会认同、资质证明 | 0-15 |
+| 时效性 | 最近更新时间、日期信号、内容新鲜度 | 0-10 |
 
-**Total: 0-100 SXO Gap Score** (lower = larger gap, higher = better alignment)
+**总分：0-100 SXO 差距分**（分数越低差距越大，分数越高说明与 SERP 预期越契合）
 
-### Step 6: Persona-Based Scoring
+### 第 6 步：角色打分（Persona-Based Scoring）
 
-Read `references/persona-scoring.md` for methodology.
+阅读 `references/persona-scoring.md` 了解方法论。
 
-1. Derive 4-7 personas from SERP intent signals:
-   - Cluster PAA questions by theme
-   - Segment ad copy by target audience
-   - Map related searches to journey stages
-2. For each persona, score the target page on 4 dimensions (25 pts each):
-   - **Relevance**: Does the page address this persona's need?
-   - **Clarity**: Can this persona find their answer within 10 seconds?
-   - **Trust**: Are there adequate trust signals for this persona?
-   - **Action**: Is there a clear next step for this persona?
-3. Output persona cards with scores and specific improvement recommendations
-4. Sort recommendations by weakest persona first (biggest opportunity)
+1. 从 SERP 意图信号中提炼 4-7 个用户角色（persona）：
+   - 按主题对 PAA 问题分组
+   - 按目标受众细分广告文案
+   - 将相关搜索映射到搜索旅程的各个阶段
+2. 针对每个角色，从 4 个维度为目标页面打分（每项 25 分）：
+   - **相关性（Relevance）**：页面是否解决了该角色的需求？
+   - **清晰度（Clarity）**：该角色能否在 10 秒内找到答案？
+   - **信任度（Trust）**：是否有足够的信任信号让该角色安心？
+   - **行动指引（Action）**：该角色是否有清晰的下一步？
+3. 输出角色卡片，附分值及具体改进建议
+4. 建议按最弱角色优先排序（机会最大的先处理）
 
-### Step 7: Wireframe Generation (Optional)
+### 第 7 步：线框图生成（可选）
 
-Only execute when `/seo sxo wireframe` is invoked.
+仅在调用 `/seo sxo wireframe` 时执行。
 
-Read `references/wireframe-templates.md` for templates.
+阅读 `references/wireframe-templates.md` 了解模板。
 
-1. Generate IST (current state) wireframe from parsed page structure
-2. Generate SOLL (target state) wireframe based on:
-   - SERP consensus page type
-   - Gap analysis findings
-   - Persona scoring weaknesses
-3. Use ultra-concrete placeholders:
-   - NOT: "Add a CTA here"
-   - YES: "Add pricing CTA with annual savings badge below hero, linking to /pricing#enterprise"
-4. Output as semantic HTML section outline with annotations
+1. 基于解析出的页面结构生成 IST（现状）线框图
+2. 基于以下内容生成 SOLL（目标状态）线框图：
+   - SERP 共识页面类型
+   - 差距分析发现
+   - 角色打分中的薄弱点
+3. 使用极具体的占位内容：
+   - 不要写："这里加一个 CTA"
+   - 应该写："在首屏下方加一个带年付节省徽章的定价 CTA，链接到 /pricing#enterprise"
+4. 以带注释的语义化 HTML 章节大纲形式输出
 
-## DataForSEO Integration
+## DataForSEO 集成
 
-If DataForSEO MCP tools are available:
+若 DataForSEO MCP 工具可用：
 
-1. **Before any API call**, run cost estimate and confirm with user
-2. Use `google_organic_serp` for precise SERP data (positions, features, snippets)
-3. Use `keyword_data` for search volume and competition metrics
-4. Fall back to WebSearch if DataForSEO unavailable -- note reduced precision in output
+1. **调用任何 API 前**，先做成本预估并与用户确认
+2. 使用 `google_organic_serp` 获取精确的 SERP 数据（排名、特性、摘要）
+3. 使用 `keyword_data` 获取搜索量与竞争度指标
+4. 若 DataForSEO 不可用则回退到 WebSearch——并在输出中注明精度有所下降
 
-## SXO Score vs SEO Health Score
+## SXO 分数 vs SEO 健康分
 
-The SXO score is **separate** from the main SEO Health Score.
+SXO 分数与主 SEO 健康分是**相互独立**的。
 
-- SEO Health Score = technical compliance (crawlability, speed, schema, etc.)
-- SXO Gap Score = alignment between page and SERP expectations
-- A page can score 95 SEO + 30 SXO = technically perfect but strategically misaligned
-- Both scores should be reported together when both are available
+- SEO 健康分 = 技术合规性（可爬取性、速度、schema 等）
+- SXO 差距分 = 页面与 SERP 预期之间的契合度
+- 一个页面可能是 95 分 SEO + 30 分 SXO——技术层面完美，但战略方向跑偏
+- 两个分数若都可用，应一并呈现
 
-## Cross-Skill References
+## 跨技能引用
 
-| Finding | Hand Off To |
+| 发现问题 | 交由处理 |
 |---------|-------------|
-| E-E-A-T gaps in persona scoring | `/seo content` for deep E-E-A-T audit |
-| Missing schema types | `/seo schema` for generation |
-| Local intent detected in SERP | `/seo local` for GBP analysis |
-| Content depth gaps | `/seo page` for deep page analysis |
-| Technical issues found during fetch | `/seo technical` for full audit |
-| Image/media gaps | `/seo images` for optimization |
+| 角色打分中发现 E-E-A-T 缺口 | `/seo content` 做深度 E-E-A-T 审查 |
+| 缺少 schema 类型 | `/seo schema` 生成对应标记 |
+| SERP 中检测到本地意图 | `/seo local` 做 GBP 分析 |
+| 内容深度存在差距 | `/seo page` 做深度页面分析 |
+| 抓取时发现技术问题 | `/seo technical` 做完整审查 |
+| 图片/媒体存在缺口 | `/seo images` 做优化分析 |
 
-## Output Format
+## 输出格式
 
-### Full SXO Analysis
+### 完整 SXO 分析
 
 ```
 ## SXO Analysis: [URL]
@@ -230,25 +231,25 @@ The SXO score is **separate** from the main SEO Health Score.
 [What could not be assessed, data source notes]
 ```
 
-## Error Handling
+## 错误处理
 
-| Error | Action |
+| 错误 | 处理方式 |
 |-------|--------|
-| URL fetch fails | Report error, suggest checking URL accessibility |
-| No keyword provided or detected | Ask user to provide target keyword |
-| WebSearch returns <5 results | Proceed with available data, note limited sample |
-| SERP has no organic results (all ads) | Note highly commercial SERP, analyze ad copy only |
-| Target page is JavaScript-rendered | Note limitation, use available HTML content |
-| DataForSEO cost exceeds threshold | Fall back to WebSearch, notify user |
+| URL 抓取失败 | 报告错误，建议检查 URL 可访问性 |
+| 未提供或未识别出关键词 | 请用户提供目标关键词 |
+| WebSearch 返回结果少于 5 条 | 用现有数据继续分析，并注明样本量有限 |
+| SERP 没有自然搜索结果（全是广告） | 注明这是高商业化 SERP，仅分析广告文案 |
+| 目标页面为 JavaScript 渲染 | 注明该限制，使用可获取到的 HTML 内容 |
+| DataForSEO 成本超过阈值 | 回退到 WebSearch，并通知用户 |
 
-## Quality Checklist
+## 质量检查清单
 
-Before delivering results, verify:
-- [ ] Target URL was fetched via `scripts/render_page.py --mode auto` (not raw curl/fetch)
-- [ ] Page type classification uses taxonomy from references
-- [ ] At least 5 SERP results were analyzed
-- [ ] User stories cite specific SERP signals as evidence
-- [ ] Persona scores include concrete improvement suggestions
-- [ ] SXO score is clearly labeled as separate from SEO Health Score
-- [ ] Limitations section is present and honest
-- [ ] Cross-skill recommendations are included where relevant
+交付结果前请确认：
+- [ ] 目标 URL 已通过 `scripts/render_page.py --mode auto` 抓取（而非直接用 curl/fetch）
+- [ ] 页面类型分类使用了参考文件中的分类体系
+- [ ] 已分析至少 5 条 SERP 结果
+- [ ] 用户故事引用了具体的 SERP 信号作为依据
+- [ ] 角色打分包含具体的改进建议
+- [ ] SXO 分数已明确标注为独立于 SEO 健康分
+- [ ] 已包含诚实、完整的「局限性」章节
+- [ ] 已在相关处给出跨技能建议

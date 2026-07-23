@@ -1,6 +1,6 @@
 ---
 name: seo-backlinks
-description: "Backlink profile analysis: referring domains, anchor text distribution, toxic link detection, competitor gap analysis. Works with free APIs (Moz, Bing Webmaster, Common Crawl) and DataForSEO extension. Use when user says backlinks, link profile, referring domains, anchor text, toxic links, link gap, link building, disavow, or backlink audit."
+description: "外链画像分析：引荐域名、锚文本分布、垃圾链接检测、竞品差距分析。支持免费 API（Moz、Bing Webmaster、Common Crawl）及 DataForSEO 扩展。当用户提到 backlinks、link profile、referring domains、anchor text、toxic links、link gap、link building、disavow 或 backlink audit 时使用本技能。Use when user says backlinks, link profile, referring domains, anchor text, toxic links, link gap, link building, disavow, or backlink audit."
 user-invocable: true
 argument-hint: "<url>"
 license: MIT
@@ -11,254 +11,258 @@ metadata:
   category: seo
 ---
 
-# Backlink Profile Analysis
+# 外链画像分析
 
-## Source Detection
+## 数据源检测
 
-Before analysis, detect available data sources:
+分析前先检测可用的数据源：
 
-1. **DataForSEO MCP** (premium): Check if `dataforseo_backlinks_summary` tool is available
-2. **Moz API** (free signup): `python3 scripts/backlinks_auth.py --check moz --json`
-3. **Bing Webmaster** (free signup): `python3 scripts/backlinks_auth.py --check bing --json`
-4. **Common Crawl** (always available): Domain-level graph with PageRank
-5. **Verification Crawler** (always available): Checks if known backlinks still exist
+1. **DataForSEO MCP**（付费）：检查 `dataforseo_backlinks_summary` 工具是否可用
+2. **Moz API**（免费注册）：`python3 scripts/backlinks_auth.py --check moz --json`
+3. **Bing Webmaster**（免费注册）：`python3 scripts/backlinks_auth.py --check bing --json`
+4. **Common Crawl**（始终可用）：带 PageRank 的域名级链接图谱
+5. **验证爬虫（Verification Crawler）**（始终可用）：核实已知外链是否仍然存在
 
-Run `python3 scripts/backlinks_auth.py --check --json` to detect all sources at once.
+运行 `python3 scripts/backlinks_auth.py --check --json` 可一次性检测所有数据源。
 
-If no sources are configured beyond the always-available tier:
-- Still produce a report using Common Crawl domain metrics
-- Suggest: "Run `/seo backlinks setup` to add free Moz and Bing API keys for richer data"
+若除「始终可用」层级外未配置任何数据源：
+- 仍应基于 Common Crawl 的域名指标产出报告
+- 建议用户：「运行 `/seo backlinks setup` 添加免费的 Moz 和 Bing API 密钥以获取更丰富的数据」
 
-## Quick Reference
+## 快速参考
 
-| Command | Purpose |
-|---------|---------|
-| `/seo backlinks <url>` | Full backlink profile analysis (uses all available sources) |
-| `/seo backlinks gap <url1> <url2>` | Competitor backlink gap analysis |
-| `/seo backlinks toxic <url>` | Toxic link detection and disavow recommendations |
-| `/seo backlinks new <url>` | New and lost backlinks (DataForSEO only) |
-| `/seo backlinks verify <url> --links <file>` | Verify known backlinks still exist |
-| `/seo backlinks setup` | Show setup instructions for free backlink APIs |
+| 命令 | 用途 |
+|---------|-------------|
+| `/seo backlinks <url>` | 完整外链画像分析（使用所有可用数据源） |
+| `/seo backlinks gap <url1> <url2>` | 竞品外链差距分析 |
+| `/seo backlinks toxic <url>` | 垃圾链接检测与拒绝收录（disavow）建议 |
+| `/seo backlinks new <url>` | 新增与流失的外链（仅 DataForSEO） |
+| `/seo backlinks verify <url> --links <file>` | 核实已知外链是否仍然存在 |
+| `/seo backlinks setup` | 展示免费外链 API 的配置说明 |
 
-## Analysis Framework
+## 分析框架
 
-Produce all 7 sections below. Each section lists data sources in preference order.
+按下方顺序产出全部 7 个章节。每个章节均按优先级列出数据来源。
 
-### 1. Profile Overview
+### 1. 画像概览
 
-**DataForSEO:** `dataforseo_backlinks_summary` → total backlinks, referring domains, domain rank, follow ratio, trend.
+**DataForSEO：** `dataforseo_backlinks_summary` → 外链总数、引荐域名数、域名评级、Follow 链接占比、趋势变化。
 
-**Moz API:** `python3 scripts/moz_api.py metrics <url> --json` → Domain Authority, Page Authority, Spam Score, linking root domains, external links.
+**Moz API：** `python3 scripts/moz_api.py metrics <url> --json` → Domain Authority、Page Authority、垃圾分数（Spam Score）、引荐根域名数、外部链接数。
 
-**Common Crawl:** `python3 scripts/commoncrawl_graph.py <domain> --json` → in-degree (referring domain count), PageRank, harmonic centrality.
+**Common Crawl：** `python3 scripts/commoncrawl_graph.py <domain> --json` → 入度（引荐域名数量）、PageRank、调和中心性（harmonic centrality）。
 
-**Scoring:**
+**评分标准：**
 
-| Metric | Good | Warning | Critical |
+| 指标 | 良好 | 警告 | 严重 |
 |--------|------|---------|----------|
-| Referring domains | >100 | 20-100 | <20 |
-| Follow ratio | >60% | 40-60% | <40% |
-| Domain diversity | No single domain >5% | 1 domain >10% | 1 domain >25% |
-| Trend | Growing or stable | Slow decline | Rapid decline (>20%/quarter) |
+| 引荐域名数 | >100 | 20-100 | <20 |
+| Follow 链接占比 | >60% | 40-60% | <40% |
+| 域名多样性 | 无单一域名占比超过 5% | 有域名占比超过 10% | 有域名占比超过 25% |
+| 趋势 | 增长或稳定 | 缓慢下滑 | 快速下滑（单季度降幅 >20%） |
 
-### 2. Anchor Text Distribution
+### 2. 锚文本分布
 
-**DataForSEO:** `dataforseo_backlinks_anchors`
+**DataForSEO：** `dataforseo_backlinks_anchors`
 
-**Moz API:** `python3 scripts/moz_api.py anchors <url> --json`
+**Moz API：** `python3 scripts/moz_api.py anchors <url> --json`
 
-**Bing Webmaster:** `python3 scripts/bing_webmaster.py links <url> --json` (extract anchor text from link details)
+**Bing Webmaster：** `python3 scripts/bing_webmaster.py links <url> --json`（从链接详情中提取锚文本）
 
-**Healthy distribution benchmarks:**
+**健康分布基准：**
 
-| Anchor Type | Target Range | Over-Optimization Signal |
+| 锚文本类型 | 目标区间 | 过度优化信号 |
 |-------------|-------------|-------------------------|
-| Branded (company/domain name) | 30-50% | <15% |
-| URL/naked link | 15-25% | N/A |
-| Generic ("click here", "learn more") | 10-20% | N/A |
-| Exact match keyword | 3-10% | >15% |
-| Partial match keyword | 5-15% | >25% |
-| Long-tail / natural | 5-15% | N/A |
+| 品牌词（公司名/域名） | 30-50% | <15% |
+| URL / 裸链接 | 15-25% | 不适用 |
+| 泛化词（"click here"、"learn more"） | 10-20% | 不适用 |
+| 精确匹配关键词 | 3-10% | >15% |
+| 部分匹配关键词 | 5-15% | >25% |
+| 长尾 / 自然锚文本 | 5-15% | 不适用 |
 
-Flag if exact-match anchors exceed 15% -- this is a Google Penguin risk signal.
+若精确匹配锚文本占比超过 15%，需标记——这是 Google Penguin 算法的风险信号。
 
-### 3. Referring Domain Quality
+### 3. 引荐域名质量
 
-**DataForSEO:** `dataforseo_backlinks_referring_domains`
+**DataForSEO：** `dataforseo_backlinks_referring_domains`
 
-**Moz API:** `python3 scripts/moz_api.py domains <url> --json` → domains with DA scores
+**Moz API：** `python3 scripts/moz_api.py domains <url> --json` → 带 DA 评分的域名列表
 
-**Common Crawl:** `python3 scripts/commoncrawl_graph.py <domain> --json` → top referring domains (domain-level, no authority scores)
+**Common Crawl：** `python3 scripts/commoncrawl_graph.py <domain> --json` → 主要引荐域名（域名级别，无权威度评分）
 
-Analyze:
-- **TLD distribution**: .edu, .gov, .org = high authority. Excessive .xyz, .info = low quality
-- **Country distribution**: Match target market. 80%+ from irrelevant countries = PBN signal
-- **Domain rank distribution**: Healthy profiles have links from all authority tiers
-- **Follow/nofollow per domain**: Sites that only nofollow = limited SEO value
+分析要点：
+- **TLD 分布**：.edu、.gov、.org 属于高权威后缀；.xyz、.info 过多则属于低质量信号
+- **国家分布**：应与目标市场匹配。若 80% 以上来自不相关国家/地区，属于 PBN（私有博客网络）信号
+- **域名权重分布**：健康的外链画像应覆盖各个权威层级
+- **各域名 Follow/Nofollow 比例**：仅有 Nofollow 链接的站点，SEO 价值有限
 
-### 4. Toxic Link Detection
+### 4. 垃圾链接检测
 
-**DataForSEO:** `dataforseo_backlinks_bulk_spam_score` + toxic patterns from reference
+**DataForSEO：** `dataforseo_backlinks_bulk_spam_score` + 参考文档中的垃圾模式库
 
-**Moz API:** Spam Score from `python3 scripts/moz_api.py metrics <url> --json` (1-17% scale, >11% = high risk)
+**Moz API：** `python3 scripts/moz_api.py metrics <url> --json` 中的垃圾分数（1-17% 量表，>11% 为高风险）
 
-**Verification Crawler:** `python3 scripts/verify_backlinks.py --target <url> --links <file> --json` (verify suspicious links still exist)
+**验证爬虫：** `python3 scripts/verify_backlinks.py --target <url> --links <file> --json`（核实可疑链接是否仍然存在）
 
-**High-risk indicators (flag immediately):**
-- Links from known PBN (Private Blog Network) domains
-- Unnatural anchor text patterns (100% exact match from a domain)
-- Links from penalized or deindexed domains
-- Mass directory submissions (50+ directory links)
-- Link farms (sites with 10K+ outbound links per page)
-- Paid link patterns (footer/sidebar links across all pages of a domain)
+**高风险信号（需立即标记）：**
+- 来自已知 PBN（私有博客网络）域名的链接
+- 非自然的锚文本模式（某域名 100% 采用精确匹配锚文本）
+- 来自被处罚或已被移除索引的域名的链接
+- 大量目录提交（50+ 条目录链接）
+- 链接农场（单页出站链接达 1 万+ 的站点）
+- 付费链接特征（某域名所有页面的页脚/侧栏均出现相同链接）
 
-**Medium-risk indicators (review manually):**
-- Links from unrelated niches
-- Reciprocal link patterns
-- Links from thin content pages (<100 words)
-- Excessive links from a single domain (>50 backlinks from 1 domain)
+**中风险信号（需人工复核）：**
+- 来自不相关垂直领域的链接
+- 互换链接模式
+- 来自低质内容页面（<100 词）的链接
+- 单一域名链接过多（同一域名贡献 50+ 条外链）
 
-Load `references/backlink-quality.md` for the full 30 toxic patterns and disavow criteria.
+关于完整的 30 种垃圾链接模式及拒绝收录（disavow）判定标准，请阅读
+`references/backlink-quality.md`。
 
-### 5. Top Pages by Backlinks
+### 5. 外链排名靠前的页面
 
-**DataForSEO:** `dataforseo_backlinks_backlinks` with target type "page"
+**DataForSEO：** `dataforseo_backlinks_backlinks`，target type 设为 "page"
 
-**Moz API:** `python3 scripts/moz_api.py pages <domain> --json`
+**Moz API：** `python3 scripts/moz_api.py pages <domain> --json`
 
-Find:
-- Which pages attract the most backlinks
-- Pages with high-authority links (link magnets)
-- Pages with zero backlinks (internal linking opportunities)
-- 404 pages with backlinks (redirect opportunities to reclaim link equity)
+需要找出：
+- 哪些页面吸引的外链最多
+- 拥有高权威度链接的页面（引链磁石）
+- 零外链的页面（内链优化机会）
+- 带有外链的 404 页面（可通过重定向找回链接权重的机会）
 
-### 6. Competitor Gap Analysis
+### 6. 竞品差距分析
 
-**DataForSEO:** `dataforseo_backlinks_referring_domains` for both domains, then compare
+**DataForSEO：** 分别对两个域名调用 `dataforseo_backlinks_referring_domains` 后对比
 
-**Bing Webmaster (unique!):** `python3 scripts/bing_webmaster.py compare <url1> <url2> --json` — the only free tool with built-in competitor comparison
+**Bing Webmaster（独家能力！）：** `python3 scripts/bing_webmaster.py compare <url1> <url2> --json` —— 唯一自带竞品对比功能的免费工具
 
-**Moz API:** Compare DA/PA between domains via `python3 scripts/moz_api.py metrics <url> --json` for each
+**Moz API：** 通过 `python3 scripts/moz_api.py metrics <url> --json` 分别获取各域名的 DA/PA 后对比
 
-Output:
-- Domains linking to competitor but NOT to target = link building opportunities
-- Domains linking to both = validate existing relationships
-- Domains linking only to target = competitive advantage
-- Top 20 link building opportunities with domain authority
+输出内容：
+- 链接指向竞品但未指向目标站点的域名 = 建站机会
+- 同时链接到双方的域名 = 已建立的合作关系验证
+- 仅链接到目标站点的域名 = 竞争优势
+- Top 20 建链机会及其域名权威度
 
-### 7. New and Lost Backlinks
+### 7. 新增与流失的外链
 
-**DataForSEO only:** `dataforseo_backlinks_backlinks` with date filters for 30/60/90 day changes
+**仅限 DataForSEO：** `dataforseo_backlinks_backlinks`，配合日期过滤查看 30/60/90 天变化
 
-**Verification Crawler:** For known links, verify current status with `python3 scripts/verify_backlinks.py`
+**验证爬虫：** 对已知链接，用 `python3 scripts/verify_backlinks.py` 核实当前状态
 
-**Note:** Free sources cannot track new/lost links over time. If this section is requested without DataForSEO, inform the user: "Link velocity tracking requires the DataForSEO extension. Free sources provide point-in-time snapshots only."
+**说明：** 免费数据源无法追踪链接随时间的新增/流失情况。若在未配置 DataForSEO
+的情况下被要求提供该章节，需告知用户：「外链变化速度追踪需要 DataForSEO 扩展。
+免费数据源仅能提供某一时间点的快照。」
 
-**Red flags:**
-- Sudden spike in new links (possible negative SEO attack)
-- Sudden loss of many links (site penalty or content removal)
-- Declining velocity over 3+ months (content not attracting links)
+**风险信号：**
+- 新增链接突然激增（可能是负面 SEO 攻击）
+- 大量链接突然流失（站点被处罚或内容被下架）
+- 链接增速连续 3 个月以上下滑（内容不再具备吸引外链的能力）
 
-## Backlink Health Score
+## 外链健康分
 
-Calculate a 0-100 score. When mixing sources, apply confidence weighting:
+计算 0-100 分。混合使用多个数据源时，按置信度加权：
 
-| Factor | Weight | Sources (preference order) | Confidence |
+| 因素 | 权重 | 数据来源（按优先级） | 置信度 |
 |--------|--------|---------------------------|------------|
-| Referring domain count | 20% | DataForSEO > Moz > CC in-degree | 1.0 / 0.85 / 0.50 |
-| Domain quality distribution | 20% | DataForSEO > Moz DA distribution | 1.0 / 0.85 |
-| Anchor text naturalness | 15% | DataForSEO > Moz > Bing anchors | 1.0 / 0.85 / 0.70 |
-| Toxic link ratio | 20% | DataForSEO > Moz spam score | 1.0 / 0.85 |
-| Link velocity trend | 10% | DataForSEO only | 1.0 |
-| Follow/nofollow ratio | 5% | DataForSEO > Bing details | 1.0 / 0.70 |
-| Geographic relevance | 10% | DataForSEO > Bing country | 1.0 / 0.70 |
+| 引荐域名数量 | 20% | DataForSEO > Moz > CC 入度 | 1.0 / 0.85 / 0.50 |
+| 域名质量分布 | 20% | DataForSEO > Moz DA 分布 | 1.0 / 0.85 |
+| 锚文本自然度 | 15% | DataForSEO > Moz > Bing 锚文本 | 1.0 / 0.85 / 0.70 |
+| 垃圾链接占比 | 20% | DataForSEO > Moz 垃圾分数 | 1.0 / 0.85 |
+| 链接增速趋势 | 10% | 仅 DataForSEO | 1.0 |
+| Follow/Nofollow 比例 | 5% | DataForSEO > Bing 详情 | 1.0 / 0.70 |
+| 地域相关性 | 10% | DataForSEO > Bing 国家数据 | 1.0 / 0.70 |
 
-**Data sufficiency gate:** Count how many of the 7 factors have at least one data source available.
-- **4+ factors with data:** Produce a numeric 0-100 score (redistribute missing weights proportionally)
-- **Fewer than 4 factors:** Do NOT produce a numeric score. Instead display:
+**数据充分性门槛：** 统计上述 7 个因素中有数据支撑的项数。
+- **4 项及以上有数据：** 产出 0-100 的数值评分（缺失权重按比例重新分配）
+- **不足 4 项：** 不产出数值评分，改为展示：
   ```
   Backlink Health Score: INSUFFICIENT DATA (X/7 factors scored)
   ```
-  Show individual factor scores that ARE available with their source and confidence.
-  Recommend: "Configure Moz API (free) for a scoreable profile. Run `/seo backlinks setup`"
+  展示已有数据支撑的各项因素得分，并注明来源与置信度。
+  建议用户：「配置免费的 Moz API 以获得可评分的完整画像。运行 `/seo backlinks setup`」
 
-When only CC is available, cap maximum score at 70/100.
-A numeric score with fewer than 4 data sources is **misleading** — it implies poor health when
-the reality is we simply lack data.
+当仅有 CC 数据可用时，最高分上限为 70/100。
+数据来源不足 4 项时给出数值评分是**具有误导性的**——这会让人误以为外链状况
+较差，而实际情况只是数据不足。
 
-## Output Format
+## 输出格式
 
-### Backlink Health Score: XX/100 (or INSUFFICIENT DATA)
+### 外链健康分：XX/100（或 INSUFFICIENT DATA）
 
-| Section | Status | Score | Data Source |
+| 章节 | 状态 | 得分 | 数据来源 |
 |---------|--------|-------|-------------|
-| Profile Overview | pass/warn/fail | XX/100 | Moz (0.85) |
-| Anchor Distribution | pass/warn/fail | XX/100 | Moz (0.85) |
-| Referring Domain Quality | pass/warn/fail | XX/100 | CC (0.50) |
-| Toxic Links | pass/warn/fail | XX/100 | Moz Spam (0.85) |
-| Top Pages | info | N/A | Moz (0.85) |
-| Link Velocity | pass/warn/fail | XX/100 | DataForSEO only |
+| 画像概览 | pass/warn/fail | XX/100 | Moz (0.85) |
+| 锚文本分布 | pass/warn/fail | XX/100 | Moz (0.85) |
+| 引荐域名质量 | pass/warn/fail | XX/100 | CC (0.50) |
+| 垃圾链接 | pass/warn/fail | XX/100 | Moz Spam (0.85) |
+| 排名靠前页面 | info | N/A | Moz (0.85) |
+| 链接增速 | pass/warn/fail | XX/100 | DataForSEO only |
 
-### Critical Issues (fix immediately)
-### High Priority (fix within 1 month)
-### Medium Priority (ongoing improvement)
-### Link Building Opportunities (top 10)
+### 严重问题（需立即修复）
+### 高优先级（1 个月内修复）
+### 中优先级（持续改进）
+### 建链机会（Top 10）
 
-## Error Handling
+## 错误处理
 
-| Error | Cause | Resolution |
+| 错误 | 原因 | 解决方案 |
 |-------|-------|-----------|
-| No sources configured | No API keys, no DataForSEO | Run `/seo backlinks setup` |
-| Moz rate limit | Free tier: 1 req/10s | Wait 10 seconds, retry. Built into script. |
-| Bing site not verified | Site not verified in Bing | Verify at https://www.bing.com/webmasters |
-| CC download timeout | Large graph file, slow connection | Use `--timeout 180` flag |
-| DataForSEO unavailable | Extension not installed | Run `./extensions/dataforseo/install.sh` |
-| No backlink data returned | Domain too new or very small | Note: small sites may have <10 backlinks |
+| 未配置任何数据源 | 无 API 密钥、无 DataForSEO | 运行 `/seo backlinks setup` |
+| Moz 触发限流 | 免费额度：每 10 秒 1 次请求 | 等待 10 秒后重试，脚本已内置该逻辑 |
+| Bing 站点未验证 | 站点未在 Bing 完成验证 | 前往 https://www.bing.com/webmasters 完成验证 |
+| CC 下载超时 | 图谱文件较大或网络较慢 | 使用 `--timeout 180` 参数 |
+| DataForSEO 不可用 | 扩展未安装 | 运行 `./extensions/dataforseo/install.sh` |
+| 未返回任何外链数据 | 域名过新或站点规模过小 | 说明：小型站点可能外链数不足 10 条 |
 
-**Fallback cascade:**
-1. DataForSEO available? → Use as primary (confidence: 1.0)
-2. Moz configured? → Use for DA/PA/spam/anchors (confidence: 0.85)
-3. Bing configured? → Use for links/competitor comparison (confidence: 0.70)
-4. Always: Common Crawl for domain-level metrics (confidence: 0.50)
-5. Always: Verification crawler for known link checks (confidence: 0.95)
-6. Nothing works? → "Run `/seo backlinks setup` to configure free APIs"
+**降级顺序：**
+1. DataForSEO 是否可用？→ 作为首选数据源（置信度：1.0）
+2. Moz 是否已配置？→ 用于 DA/PA/垃圾分数/锚文本（置信度：0.85）
+3. Bing 是否已配置？→ 用于链接数据/竞品对比（置信度：0.70）
+4. 始终可用：Common Crawl 提供域名级指标（置信度：0.50）
+5. 始终可用：验证爬虫核实已知链接（置信度：0.95）
+6. 均不可用？→ 「运行 `/seo backlinks setup` 配置免费 API」
 
-## Pre-Delivery Review (MANDATORY)
+## 交付前复核（强制要求）
 
-Before presenting any backlink analysis to the user, run this checklist internally.
-Do NOT skip this step. Fix any issues found before showing the report.
+在向用户展示任何外链分析报告前，须先在内部完成以下检查清单，不可跳过。
+发现的问题需在展示报告前修复。
 
-### Fact-Check Every Claim
-- [ ] **Schema claims**: Did parse_html return `@type` for each block? If any `@type` is missing,
-      re-check — it may use `@graph` wrapper (valid JSON-LD, not malformed).
-- [ ] **"link_removed" findings**: Is the page JS-rendered? If `unverifiable_js`, say so — never
-      report a JS-rendered page as "link removed" (that's a false negative).
-- [ ] **H1 findings**: Are any H1s in the `h1_suspicious` list? If so, note they are likely
-      counters/stats, not semantic headings.
-- [ ] **Reciprocal links**: If site A links to site B AND B links back to A, flag it as a
-      reciprocal link pattern. Check outbound links against verified inbound sources.
-- [ ] **Health score**: Are 4+ of 7 factors scored? If not, report INSUFFICIENT DATA — never
-      show a misleading numeric score.
+### 逐项核实每条结论
+- [ ] **Schema 相关结论**：parse_html 是否为每个区块返回了 `@type`？若某个 `@type`
+      缺失，需重新检查——可能使用了 `@graph` 包装（属于合法 JSON-LD，并非格式错误）。
+- [ ] **"link_removed" 判定**：该页面是否为 JS 渲染？若结果为 `unverifiable_js`，
+      需如实说明——切勿将 JS 渲染页面误判为「链接已移除」（这是一种假阴性）。
+- [ ] **H1 相关结论**：`h1_suspicious` 列表中是否包含可疑 H1？若有，需注明这些
+      很可能是计数器/统计数字，而非语义标题。
+- [ ] **互换链接**：若站点 A 链接到站点 B，且 B 也链接回 A，需标记为互换链接
+      模式，并核对出站链接与已验证的入站来源。
+- [ ] **健康分**：7 个因素中是否有 4 项及以上有评分？若没有，需报告
+      INSUFFICIENT DATA——绝不展示具有误导性的数值评分。
 
-### Verify Data Source Labels
-- [ ] Every metric in the report has a source label (e.g., "Parsed (0.95)", "CC (0.50)")
-- [ ] Every "not found" result distinguishes between "not crawled" vs "below threshold" vs "error"
-- [ ] Social media pages flagged as `unverifiable_js` (not `link_removed`)
+### 核实数据来源标注
+- [ ] 报告中的每个指标都标注了数据来源（例如 "Parsed (0.95)"、"CC (0.50)"）
+- [ ] 每条「未发现」结果都区分了「未抓取」「低于阈值」「出错」这三种情况
+- [ ] 社交媒体页面标记为 `unverifiable_js`（而非 `link_removed`）
 
-### Cross-Check Consistency
-- [ ] Platform detection matches actual signals (check for wp-content, shopify CDN, etc.)
-- [ ] Referring domain count in summary matches the actual verified links list
-- [ ] No claim is presented without a data source backing it
+### 交叉核对一致性
+- [ ] 平台识别结果与实际信号相符（检查 wp-content、Shopify CDN 等特征）
+- [ ] 摘要中的引荐域名数量与实际验证过的链接列表一致
+- [ ] 每条结论都有数据来源支撑，不存在无据之言
 
-If ANY check fails, fix the finding before presenting. Never present inferred data as fact.
+若任一检查项未通过，须在展示报告前修复对应发现。切勿将推断数据当作既定事实呈现。
 
-## Post-Analysis
+## 分析完成后
 
-After completing any backlink analysis command, always offer:
-"Generate a professional PDF report? Use `/seo google report`"
+完成任意外链分析命令后，始终提议：
+「是否生成专业 PDF 报告？可使用 `/seo google report`」
 
-## Reference Documentation
+## 参考文档
 
-Load on demand (do NOT load at startup):
-- `skills/seo/references/backlink-quality.md` -- Detailed toxic link patterns and scoring methodology (shared reference, load when analyzing toxic links or spam scores)
-- `skills/seo/references/free-backlink-sources.md` -- Source comparison, confidence weighting, setup guides (shared reference, load when configuring free backlink APIs)
+按需加载（启动时不加载）：
+- `skills/seo/references/backlink-quality.md` -- 详细的垃圾链接模式与评分方法论（共享参考文档，分析垃圾链接或垃圾分数时加载）
+- `skills/seo/references/free-backlink-sources.md` -- 数据源对比、置信度加权、配置指南（共享参考文档，配置免费外链 API 时加载）
+</content>

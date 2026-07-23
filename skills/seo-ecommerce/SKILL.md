@@ -1,12 +1,13 @@
 ---
 name: seo-ecommerce
 description: >
-  E-commerce SEO analysis: Google Shopping visibility, Amazon marketplace
-  intelligence, product schema validation, competitor pricing analysis, and
-  marketplace keyword gaps. Combines on-page product SEO with marketplace data
-  from DataForSEO Merchant API. Use when user says "ecommerce SEO", "product SEO",
-  "Google Shopping", "marketplace SEO", "product schema", "Amazon SEO",
-  "product listings", "shopping ads", or "merchant SEO".
+  电商 SEO 分析：Google Shopping 可见度、Amazon 平台情报、产品 Schema 校验、
+  竞品定价分析，以及平台关键词缺口挖掘。将站内产品 SEO 与来自 DataForSEO
+  Merchant API 的平台数据相结合。当用户说"电商 SEO"、"ecommerce SEO"、
+  "产品 SEO"、"product SEO"、"Google Shopping"、"平台 SEO"、
+  "marketplace SEO"、"产品 schema"、"product schema"、"Amazon SEO"、
+  "产品列表"、"product listings"、"购物广告"、"shopping ads"，或
+  "商家 SEO"、"merchant SEO" 时使用本技能。
 user-invocable: true
 argument-hint: "<url or keyword>"
 license: MIT
@@ -18,220 +19,220 @@ metadata:
   category: seo
 ---
 
-# E-commerce SEO Analysis
+# 电商 SEO 分析
 
-Comprehensive product page optimization, marketplace intelligence, and
-competitive pricing analysis. Works standalone (on-page + schema) and with
-DataForSEO Merchant API for live Google Shopping and Amazon data.
+覆盖产品页优化、平台情报和竞品定价分析的综合分析能力。既可独立运行
+（站内 + Schema 分析），也可结合 DataForSEO Merchant API 获取实时的
+Google Shopping 和 Amazon 数据。
 
-## Commands
+## 命令
 
-| Command | Purpose | DataForSEO? |
+| 命令 | 用途 | 是否需要 DataForSEO |
 |---------|---------|-------------|
-| `/seo ecommerce <url>` | Full e-commerce SEO analysis of a product page or store | Optional |
-| `/seo ecommerce products <keyword>` | Google Shopping competitive analysis | Required |
-| `/seo ecommerce gaps <domain>` | Keyword gap: organic vs Shopping visibility | Required |
-| `/seo ecommerce schema <url>` | Product schema validation and enhancement | No |
+| `/seo ecommerce <url>` | 对产品页或店铺进行完整的电商 SEO 分析 | 可选 |
+| `/seo ecommerce products <keyword>` | Google Shopping 竞品分析 | 必需 |
+| `/seo ecommerce gaps <domain>` | 关键词缺口：自然排名 vs Shopping 可见度 | 必需 |
+| `/seo ecommerce schema <url>` | 产品 Schema 校验与增强 | 否 |
 
 ---
 
-## 1. Product Page Analysis (No DataForSEO Needed)
+## 1. 产品页分析（无需 DataForSEO）
 
-Fetch and parse any product page for on-page SEO quality.
+抓取并解析任意产品页，评估其站内 SEO 质量。
 
-### Workflow
+### 工作流程
 
 ```
-1. python3 scripts/render_page.py <url> --mode auto → raw/rendered HTML
-2. python3 scripts/parse_html.py --url <url>   → SEO elements
-3. Analyze product-specific signals (below)
+1. python3 scripts/render_page.py <url> --mode auto → 获取原始/渲染后的 HTML
+2. python3 scripts/parse_html.py --url <url>   → 提取 SEO 元素
+3. 分析产品专属信号（见下文）
 ```
 
-### Product SEO Checklist
+### 产品 SEO 检查清单
 
-#### Title Tag
-- [ ] Contains primary product keyword
-- [ ] Includes brand name
-- [ ] Under 60 characters (no truncation in SERPs)
-- [ ] Format: `[Product Name] - [Key Feature] | [Brand]`
+#### Title 标签
+- [ ] 包含核心产品关键词
+- [ ] 包含品牌名称
+- [ ] 不超过 60 个字符（避免在 SERP 中被截断）
+- [ ] 格式：`[产品名称] - [核心卖点] | [品牌]`
 
 #### Meta Description
-- [ ] Contains product keyword + benefit
-- [ ] Includes price or "from $XX" (triggers rich snippet interest)
-- [ ] Call-to-action present (Shop now, Buy, Free shipping)
-- [ ] Under 155 characters
+- [ ] 包含产品关键词 + 利益点
+- [ ] 包含价格或"低至 $XX"（有助于触发富媒体摘要展示）
+- [ ] 包含行动号召（立即选购、购买、包邮）
+- [ ] 不超过 155 个字符
 
-#### Heading Structure
-- [ ] Single H1 matching primary product name
-- [ ] H2s for: Features, Specifications, Reviews, Related Products
-- [ ] No duplicate H1 tags across product variants
+#### 标题层级结构
+- [ ] 单一 H1，与核心产品名称一致
+- [ ] H2 覆盖：产品特性、规格参数、评价、相关产品
+- [ ] 不同产品变体（variants）之间不出现重复 H1 标签
 
-#### Product Images
-- [ ] Alt text includes product name + distinguishing feature
-- [ ] File names are descriptive (not `IMG_001.jpg`)
-- [ ] WebP format served (with JPEG fallback)
-- [ ] At least 3 images per product (hero, detail, lifestyle)
-- [ ] Image dimensions >= 800px for Google Shopping eligibility
-- [ ] Lazy loading on below-fold images only
+#### 产品图片
+- [ ] Alt text 包含产品名称及区分性特征
+- [ ] 文件名具有描述性（而非 `IMG_001.jpg`）
+- [ ] 提供 WebP 格式（并附 JPEG 回退方案）
+- [ ] 每个产品至少 3 张图片（主图、细节图、场景图）
+- [ ] 图片尺寸 >= 800px，满足 Google Shopping 的准入要求
+- [ ] 仅对首屏以下图片启用懒加载
 
-#### Internal Linking
-- [ ] Breadcrumb navigation: Home > Category > Subcategory > Product
-- [ ] Related products section (cross-sell / upsell)
-- [ ] Link back to category page with keyword-rich anchor
-- [ ] Reviews section links to full review page (if separate)
+#### 内链结构
+- [ ] 面包屑导航：首页 > 分类 > 子分类 > 产品
+- [ ] 相关产品模块（交叉销售/向上销售）
+- [ ] 链接回分类页，锚文本包含关键词
+- [ ] 评价区块链接到完整评价页（如为独立页面）
 
-#### Content Quality
-- [ ] Unique product description (not manufacturer copy-paste)
-- [ ] Word count >= 200 for product description body
-- [ ] Specs table present (not just prose)
-- [ ] User reviews on-page (UGC signals)
+#### 内容质量
+- [ ] 独特的产品描述（而非直接照搬厂商文案）
+- [ ] 产品描述正文字数 >= 200
+- [ ] 提供规格参数表（而非仅有大段文字）
+- [ ] 页面内展示用户评价（UGC 信号）
 
-### Scoring
+### 评分权重
 
-| Category | Weight | Criteria |
+| 类别 | 权重 | 评分标准 |
 |----------|--------|----------|
-| Schema completeness | 25% | Required + recommended Product fields |
-| Title & meta | 15% | Keyword placement, length, format |
-| Image optimization | 20% | Alt text, format, sizing, count |
-| Content quality | 20% | Unique description, specs, reviews |
-| Internal linking | 10% | Breadcrumbs, related products, categories |
-| Technical | 10% | Page speed, mobile rendering, canonical |
+| Schema 完整度 | 25% | 必填 + 推荐的 Product 字段 |
+| Title & Meta | 15% | 关键词位置、长度、格式 |
+| 图片优化 | 20% | Alt text、格式、尺寸、数量 |
+| 内容质量 | 20% | 独特描述、规格参数、评价 |
+| 内链结构 | 10% | 面包屑、相关产品、分类页 |
+| 技术层面 | 10% | 页面速度、移动端渲染、canonical |
 
 ---
 
-## 2. Google Shopping Intelligence (DataForSEO Merchant API)
+## 2. Google Shopping 情报（DataForSEO Merchant API）
 
-Live competitive analysis from Google Shopping results.
+来自 Google Shopping 结果的实时竞品分析。
 
-### Cost Guardrail (MANDATORY)
+### 成本护栏（强制）
 
-Before EVERY Merchant API call:
+每次调用 Merchant API 前：
 ```bash
 python3 scripts/dataforseo_costs.py check merchant_google_products_search
 ```
 
-- `"status": "approved"` -- proceed
-- `"status": "needs_approval"` -- show cost, ask user
-- `"status": "blocked"` -- stop, inform user
+- `"status": "approved"` —— 直接执行
+- `"status": "needs_approval"` —— 展示成本，征询用户
+- `"status": "blocked"` —— 停止操作，告知用户
 
-After each call:
+每次调用完成后：
 ```bash
 python3 scripts/dataforseo_costs.py log merchant_google_products_search <cost>
 ```
 
-### Workflow
+### 工作流程
 
 ```bash
-# Product search: who sells what at what price
+# 产品搜索：谁在以什么价格卖什么
 python3 scripts/dataforseo_merchant.py search "<keyword>" --marketplace google
 
-# Seller analysis: merchant ratings and dominance
+# 商家分析：商家评分与市场占有情况
 python3 scripts/dataforseo_merchant.py sellers "<keyword>"
 
-# Normalize results for analysis
+# 结果归一化处理，便于分析
 python3 scripts/dataforseo_normalize.py results.json --module merchant
 ```
 
-### Analysis Outputs
+### 分析输出
 
-#### Pricing Intelligence
-- Price distribution: min, max, median, P25, P75
-- Price outliers (> 2 standard deviations from median)
-- Price-to-rating correlation
-- Currency normalization to USD (or user-specified)
+#### 定价情报
+- 价格分布：最低值、最高值、中位数、P25、P75
+- 价格异常值（偏离中位数超过 2 个标准差）
+- 价格与评分的相关性
+- 统一换算为美元（或用户指定币种）
 
-#### Seller Landscape
-- Top 10 sellers by listing count
-- Merchant rating distribution
-- Free shipping prevalence
-- New vs established sellers
+#### 商家格局
+- 按上架商品数排名的前 10 商家
+- 商家评分分布
+- 包邮商家占比
+- 新商家与老牌商家的对比
 
-#### Product Listing Quality
-- Title keyword patterns in top listings
-- Average rating and review count benchmarks
-- Image count per listing
-- Availability status distribution
+#### 产品列表质量
+- 排名靠前列表中的标题关键词规律
+- 平均评分与评论数基准
+- 每个列表的图片数量
+- 库存状态分布
 
-Load `references/marketplace-endpoints.md` for full API parameter details.
+加载 `references/marketplace-endpoints.md` 获取完整的 API 参数说明。
 
 ---
 
-## 3. Amazon Marketplace (DataForSEO)
+## 3. Amazon 平台（DataForSEO）
 
-Cross-marketplace intelligence comparing Google Shopping and Amazon.
+对比 Google Shopping 与 Amazon 的跨平台情报。
 
-### Cost Guardrail (MANDATORY)
+### 成本护栏（强制）
 
 ```bash
 python3 scripts/dataforseo_costs.py check merchant_amazon_products_search
 ```
 
-Amazon endpoints are in the `warn_endpoints` set -- always requires user approval.
+Amazon 相关端点属于 `warn_endpoints` 集合——始终需要用户批准。
 
-### Workflow
+### 工作流程
 
 ```bash
-# Amazon product search
+# Amazon 产品搜索
 python3 scripts/dataforseo_merchant.py search "<keyword>" --marketplace amazon
 
-# Cross-marketplace comparison
+# 跨平台对比
 python3 scripts/dataforseo_merchant.py compare "<keyword>"
 ```
 
-### Cross-Marketplace Report
+### 跨平台对比报告
 
-| Metric | Google Shopping | Amazon |
+| 指标 | Google Shopping | Amazon |
 |--------|---------------|--------|
-| Avg price | $ | $ |
-| Median rating | X.X | X.X |
-| Avg review count | N | N |
-| Top seller share | % | % |
-| Free shipping % | % | % |
+| 平均价格 | $ | $ |
+| 评分中位数 | X.X | X.X |
+| 平均评论数 | N | N |
+| 头部商家份额 | % | % |
+| 包邮占比 | % | % |
 
 ---
 
-## 4. Marketplace Keyword Gaps
+## 4. 平台关键词缺口
 
-Identify mismatches between organic and Shopping visibility.
+识别自然排名与 Shopping 可见度之间的错位。
 
-### Workflow
+### 工作流程
 
-1. Fetch organic rankings via seo-dataforseo:
-   `dataforseo_labs_google_ranked_keywords` for domain
-2. Fetch Google Shopping presence via Merchant API:
-   `merchant_google_products_search` for top organic keywords
-3. Cross-reference results
+1. 通过 seo-dataforseo 获取自然排名：
+   针对该域名调用 `dataforseo_labs_google_ranked_keywords`
+2. 通过 Merchant API 获取 Google Shopping 曝光情况：
+   针对排名靠前的自然关键词调用 `merchant_google_products_search`
+3. 交叉对比结果
 
-### Gap Types
+### 缺口类型
 
-| Gap Type | Meaning | Action |
+| 缺口类型 | 含义 | 建议动作 |
 |----------|---------|--------|
-| **Organic Only** | Ranks organically but no Shopping ads | Create Google Merchant Center feed, bid on these keywords |
-| **Shopping Only** | Shopping visibility but weak/no organic | Create content (buying guides, comparison pages) for these keywords |
-| **Both Present** | Visible in both channels | Optimize: ensure price consistency, enhance schema |
-| **Neither** | No visibility in either | Low priority unless high volume |
+| **仅自然排名** | 有自然排名但无 Shopping 广告 | 建立 Google Merchant Center feed，针对这些关键词投放竞价 |
+| **仅 Shopping 曝光** | 有 Shopping 曝光但自然排名弱/无 | 针对这些关键词创建内容（购买指南、对比页） |
+| **两者兼有** | 两个渠道都有曝光 | 优化：确保价格一致性，增强 Schema |
+| **两者皆无** | 两个渠道都无曝光 | 除非搜索量很高，否则优先级较低 |
 
-### Output Format
+### 输出格式
 
 ```
-## Keyword Gap Analysis: example.com
+## 关键词缺口分析：example.com
 
-### Opportunities: Organic → Shopping (12 keywords)
-| Keyword | Organic Pos | Volume | CPC | Recommended Action |
+### 机会点：自然排名 → Shopping（12 个关键词）
+| 关键词 | 自然排名位置 | 搜索量 | CPC | 建议动作 |
 |---------|------------|--------|-----|-------------------|
 
-### Opportunities: Shopping → Organic (8 keywords)
-| Keyword | Shopping Rank | Volume | CPC | Content Type Needed |
+### 机会点：Shopping → 自然排名（8 个关键词）
+| 关键词 | Shopping 排名 | 搜索量 | CPC | 所需内容类型 |
 |---------|-------------|--------|-----|-------------------|
 ```
 
 ---
 
-## 5. Product Schema Enhancement
+## 5. 产品 Schema 增强
 
-Validate and generate Product schema following Google's current requirements.
+按 Google 现行要求校验并生成 Product Schema。
 
-### Required Properties (Google Merchant)
+### 必填属性（Google Merchant）
 
 ```json
 {
@@ -252,119 +253,118 @@ Validate and generate Product schema following Google's current requirements.
 }
 ```
 
-### Recommended Properties (Enhance Rich Results)
+### 推荐属性（增强富媒体结果）
 
-- `sku` -- product identifier
-- `gtin13` / `gtin14` / `mpn` -- global trade identifiers
-- `aggregateRating` -- star rating + review count
-- `review` -- individual reviews (minimum 1)
-- `color`, `material`, `size` -- variant attributes
-- `shippingDetails` -- ShippingDetails with rate and delivery time
-- `hasMerchantReturnPolicy` -- MerchantReturnPolicy with type and days
+- `sku` —— 产品标识符
+- `gtin13` / `gtin14` / `mpn` —— 全球贸易标识码
+- `aggregateRating` —— 星级评分 + 评论数
+- `review` —— 单条评价（至少 1 条）
+- `color`、`material`、`size` —— 变体属性
+- `shippingDetails` —— 包含费率和配送时长的 ShippingDetails
+- `hasMerchantReturnPolicy` —— 包含类型和天数的 MerchantReturnPolicy
 
-### Validation Rules
+### 校验规则
 
-1. `price` must be a number string, not "$29.99" (no currency symbol)
-2. `availability` must use full Schema.org URL enum
-3. `image` should be array with >= 1 high-res image URL
-4. `priceCurrency` must be ISO 4217 (USD, EUR, GBP)
-5. `brand.name` must not be empty or "N/A"
-6. Dates in `priceValidUntil` must be ISO 8601
-7. If `aggregateRating` present: `ratingValue` and `reviewCount` required
+1. `price` 必须是数字字符串，而非 "$29.99"（不含货币符号）
+2. `availability` 必须使用完整的 Schema.org URL 枚举值
+3. `image` 应为数组，至少包含 1 张高分辨率图片 URL
+4. `priceCurrency` 必须符合 ISO 4217 标准（USD、EUR、GBP）
+5. `brand.name` 不得为空或 "N/A"
+6. `priceValidUntil` 中的日期必须符合 ISO 8601 格式
+7. 若存在 `aggregateRating`：`ratingValue` 和 `reviewCount` 为必填项
 
-### Schema Scoring
+### Schema 评分标准
 
-| Completeness | Score |
+| 完整度 | 得分 |
 |-------------|-------|
-| All required fields | 50/100 |
+| 全部必填字段 | 50/100 |
 | + aggregateRating | 65/100 |
 | + sku/gtin/mpn | 75/100 |
 | + shippingDetails | 85/100 |
 | + merchantReturnPolicy | 90/100 |
-| + reviews (3+) | 100/100 |
+| + 评价（3 条以上） | 100/100 |
 
 ---
 
-## Cross-Skill Integration
+## 跨技能集成
 
-| Skill | Integration Point |
+| 技能 | 集成点 |
 |-------|------------------|
-| **seo-schema** | Delegates Product schema generation; reuses validation logic |
-| **seo-images** | Product image audit (alt text, format, dimensions) — plus `DigitalSourceType: TrainedAlgorithmicMedia` IPTC label for AI-generated product images (Merchant Center requirement) |
-| **seo-content** | Product description E-E-A-T and uniqueness analysis |
-| **seo-dataforseo** | Organic keyword rankings for gap analysis |
-| **seo-technical** | Core Web Vitals for product pages (LCP on hero image) |
-| **seo-google** | Google Merchant Center feed validation via GSC |
+| **seo-schema** | 委托生成 Product Schema，复用其校验逻辑 |
+| **seo-images** | 产品图片审计（alt text、格式、尺寸）——以及针对 AI 生成产品图片的 `DigitalSourceType: TrainedAlgorithmicMedia` IPTC 标签（Merchant Center 强制要求） |
+| **seo-content** | 产品描述的 E-E-A-T 与独特性分析 |
+| **seo-dataforseo** | 用于缺口分析的自然关键词排名数据 |
+| **seo-technical** | 产品页的 Core Web Vitals（主图的 LCP 表现） |
+| **seo-google** | 通过 GSC 校验 Google Merchant Center feed |
 
-## UCP — Universal Commerce Protocol (forward-looking)
+## UCP —— 统一商务协议（前瞻性内容）
 
-Google-led standard (co-developed with Shopify, Etsy, Walmart, Wayfair, Visa,
-Mastercard, etc.) for letting AI agents discover, negotiate, and transact with
-merchants without one-off integrations. Already powers direct buying from AI
-Mode and Gemini.
+由 Google 主导（并与 Shopify、Etsy、Walmart、Wayfair、Visa、
+Mastercard 等共同开发）的一项标准，让 AI 代理无需逐一定制对接，
+即可发现、协商并与商家完成交易。目前已在 AI Mode 和 Gemini 中
+支撑直接购买场景。
 
-Merchants already on **Google Merchant Center** with clean Product schema can
-declare a UCP profile at `/.well-known/ucp` listing capabilities
-(`dev.ucp.shopping.checkout`, `.fulfillment`, `.discount`). See
-`references/ucp-universal-commerce-protocol.md` for audit criteria,
-capability examples, and the relationship to AP2 (Agent Payments Protocol).
+已入驻 **Google Merchant Center** 且拥有完善 Product Schema 的商家，
+可在 `/.well-known/ucp` 处声明 UCP 配置文件，列出自身能力
+（`dev.ucp.shopping.checkout`、`.fulfillment`、`.discount`）。审计标准、
+能力示例，以及与 AP2（Agent Payments Protocol）的关系，详见
+`references/ucp-universal-commerce-protocol.md`。
 
-### Audit command
+### 审计命令
 
 ```bash
-# Discover and validate the UCP profile
+# 发现并校验 UCP 配置文件
 python3 scripts/ucp_check.py https://store.example.com --json
 
-# With endpoint reachability probes (HEAD each declared capability)
+# 附带端点可达性探测（对每个已声明能力发起 HEAD 请求）
 python3 scripts/ucp_check.py https://store.example.com --probe-endpoints --json
 ```
 
-The script returns: profile presence, version, declared capabilities,
-structural issues (missing fields, unknown capability IDs), and (with
-`--probe-endpoints`) per-endpoint reachability. SSRF-blocked endpoints are
-reported explicitly. Missing profile is reported as opportunity, not failure
-— UCP adoption is early.
+该脚本返回：配置文件是否存在、版本号、已声明的能力、
+结构性问题（缺失字段、未知能力 ID），以及（在使用
+`--probe-endpoints` 时）各端点的可达性。被 SSRF 拦截的端点会被明确标出。
+配置文件缺失会被视为待改进的机会点，而非失败项——UCP 目前仍处于早期阶段。
 
 ---
 
-## Error Handling
+## 错误处理
 
-| Error | Cause | Response |
+| 错误 | 原因 | 应对方式 |
 |-------|-------|----------|
-| No Product schema found | Page lacks JSON-LD | Analyze page content, generate recommended schema |
-| DataForSEO credentials missing | Env vars not set | Run analysis without marketplace data, note limitation |
-| Cost check blocked | Daily budget exceeded | Inform user, offer free-only analysis |
-| Empty Shopping results | No products for keyword | Suggest broader keyword, check location settings |
-| Amazon API timeout | Network/rate limit | Retry with backoff, fall back to Google-only |
-| Invalid URL | Malformed input | Validate via `google_auth.validate_url()`, show error |
-| Non-product page | URL is category/homepage | Detect page type, suggest `/seo ecommerce schema` instead |
+| 未找到 Product Schema | 页面缺少 JSON-LD | 分析页面内容，生成推荐的 Schema |
+| DataForSEO 凭证缺失 | 环境变量未设置 | 在不使用平台数据的情况下继续分析，并注明局限性 |
+| 成本检查被拦截 | 已超出每日预算 | 告知用户，提供仅限免费数据的分析 |
+| Shopping 结果为空 | 该关键词无对应产品 | 建议扩大关键词范围，检查地区设置 |
+| Amazon API 超时 | 网络问题/触发限流 | 采用退避策略重试，回退为仅使用 Google 数据 |
+| URL 无效 | 输入格式错误 | 通过 `google_auth.validate_url()` 校验，展示错误信息 |
+| 非产品页面 | URL 为分类页/首页 | 检测页面类型，建议改用 `/seo ecommerce schema` |
 
 ---
 
-## Output Template
+## 输出模板
 
 ```
-## E-commerce SEO Report: [URL or Keyword]
+## 电商 SEO 报告：[URL 或关键词]
 
-### Overall Score: XX/100
+### 综合得分：XX/100
 
-### Product Page SEO
-- Schema Completeness: XX/100
-- Title & Meta: XX/100
-- Image Optimization: XX/100
-- Content Quality: XX/100
-- Internal Linking: XX/100
+### 产品页 SEO
+- Schema 完整度：XX/100
+- Title & Meta：XX/100
+- 图片优化：XX/100
+- 内容质量：XX/100
+- 内链结构：XX/100
 
-### Marketplace Intelligence (if DataForSEO available)
-- Google Shopping Listings: N products found
-- Price Range: $XX - $XX (median: $XX)
-- Top Seller: [name] (XX% market share)
-- Amazon Comparison: [available/not checked]
+### 平台情报（如 DataForSEO 可用）
+- Google Shopping 列表数：找到 N 个产品
+- 价格区间：$XX - $XX（中位数：$XX）
+- 头部商家：[名称]（市场份额 XX%）
+- Amazon 对比：[已获取/未检查]
 
-### Top Recommendations
-1. [Critical] ...
-2. [High] ...
-3. [Medium] ...
+### 重点建议
+1. [严重] ...
+2. [高] ...
+3. [中] ...
 
-Generate a PDF report? Use `/seo google report`
+是否生成 PDF 报告？使用 `/seo google report`
 ```

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude SEO AI 工作台</title>
+<style>
+  :root {
+    --bg:#f5f6f8; --panel:#fff; --line:#e5e7eb; --text:#171717; --muted:#6b7280;
+    --subtle:#f3f4f6; --brand:#2563eb; --brand-soft:#eff6ff; --good:#16803d;
+    --warn:#b45309; --danger:#b42318; --shadow:0 12px 34px rgba(15,23,42,.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#111214; --panel:#1b1d20; --line:#30343a; --text:#f5f5f5; --muted:#a3a7ae;
+      --subtle:#24272b; --brand:#60a5fa; --brand-soft:#17243a; --good:#4ade80;
+      --warn:#fbbf24; --danger:#f87171; --shadow:none;
+    }
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; }
+  body { background:var(--bg); color:var(--text); font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif; }
+  button, textarea, select, input { font:inherit; }
+  button { color:inherit; }
+  .app { min-height:100%; display:grid; grid-template-rows:auto 1fr; }
+  .topbar {
+    height:62px; background:var(--panel); border-bottom:1px solid var(--line); padding:0 22px;
+    display:flex; align-items:center; justify-content:space-between; gap:18px;
+  }
+  .brand { display:flex; align-items:center; gap:11px; min-width:0; }
+  .logo { width:34px; height:34px; border-radius:10px; display:grid; place-items:center; background:var(--text); color:var(--panel); font-weight:750; }
+  .brand h1 { font-size:15px; margin:0; }
+  .brand p { color:var(--muted); margin:0; font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .runtime { display:flex; align-items:center; gap:9px; color:var(--muted); font-size:12px; white-space:nowrap; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#9ca3af; }
+  .dot.ok { background:#22c55e; box-shadow:0 0 0 4px rgba(34,197,94,.12); }
+  .dot.bad { background:#ef4444; box-shadow:0 0 0 4px rgba(239,68,68,.12); }
+
+  .layout { width:min(1480px, 100%); height:calc(100vh - 62px); margin:0 auto; padding:18px; display:grid; grid-template-columns:280px minmax(0,1fr); gap:16px; min-height:0; }
+  .sidebar, .chat { background:var(--panel); border:1px solid var(--line); border-radius:15px; box-shadow:var(--shadow); min-height:0; }
+  .sidebar { padding:15px; overflow:auto; }
+  .side-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:13px; }
+  .side-head strong { font-size:13px; }
+  .new-chat, .ghost, .send {
+    border:0; border-radius:9px; cursor:pointer; transition:.15s ease;
+  }
+  .new-chat { background:var(--subtle); padding:7px 10px; font-size:12px; }
+  .new-chat:hover, .ghost:hover { filter:brightness(.96); }
+  .search { width:100%; border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:9px; padding:8px 10px; outline:none; margin-bottom:10px; }
+  .search:focus { border-color:var(--brand); }
+  .skill-list { display:flex; flex-direction:column; gap:4px; }
+  .skill {
+    width:100%; border:1px solid transparent; background:transparent; border-radius:9px; padding:9px 10px;
+    cursor:pointer; text-align:left;
+  }
+  .skill:hover { background:var(--subtle); }
+  .skill.on { background:var(--brand-soft); border-color:color-mix(in srgb,var(--brand) 28%,transparent); }
+  .skill-name { font-size:12.5px; font-weight:650; }
+  .skill-desc { color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+  .side-note { margin-top:15px; padding-top:13px; border-top:1px solid var(--line); color:var(--muted); font-size:11.5px; }
+
+  .chat { display:grid; grid-template-rows:auto 1fr auto; overflow:hidden; min-height:0; }
+  .chat-head { padding:13px 17px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .chat-title { min-width:0; }
+  .chat-title strong { font-size:13px; }
+  .chat-title span { color:var(--muted); font-size:11.5px; margin-left:7px; }
+  .controls { display:flex; gap:8px; align-items:center; }
+  select { border:1px solid var(--line); background:var(--panel); color:var(--text); border-radius:8px; padding:6px 9px; font-size:12px; outline:none; }
+  .messages { overflow-y:auto; padding:25px max(22px,7%); scroll-behavior:smooth; }
+  .welcome { max-width:680px; margin:10vh auto 0; text-align:center; }
+  .welcome .mark { width:48px; height:48px; border-radius:15px; background:var(--text); color:var(--panel); display:grid; place-items:center; font-weight:800; margin:0 auto 15px; }
+  .welcome h2 { font-size:22px; margin:0 0 7px; letter-spacing:-.02em; }
+  .welcome p { color:var(--muted); margin:0 auto 22px; max-width:530px; }
+  .starters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; text-align:left; }
+  .starter { border:1px solid var(--line); background:var(--panel); color:var(--text); border-radius:11px; padding:12px 13px; cursor:pointer; }
+  .starter:hover { border-color:var(--brand); background:var(--brand-soft); }
+  .starter strong { display:block; font-size:12.5px; }
+  .starter span { display:block; color:var(--muted); font-size:11.5px; margin-top:2px; }
+  .message { max-width:850px; margin:0 auto 22px; display:grid; grid-template-columns:32px minmax(0,1fr); gap:11px; }
+  .avatar { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; background:var(--subtle); font-size:11px; font-weight:700; }
+  .message.user .avatar { background:var(--brand); color:white; }
+  .who { font-size:11.5px; font-weight:650; margin-bottom:5px; }
+  .bubble { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.7; }
+  .message.user .bubble { background:var(--subtle); display:inline-block; padding:10px 13px; border-radius:4px 12px 12px 12px; }
+  .pending { color:var(--muted); }
+  .thinking { display:inline-flex; gap:4px; vertical-align:2px; margin-left:4px; }
+  .thinking i { width:5px; height:5px; border-radius:50%; background:var(--muted); animation:pulse 1s infinite ease-in-out; }
+  .thinking i:nth-child(2){animation-delay:.15s}.thinking i:nth-child(3){animation-delay:.3s}
+  @keyframes pulse { 0%,80%,100%{opacity:.25;transform:scale(.7)} 40%{opacity:1;transform:scale(1)} }
+  .activity { margin-top:9px; border-left:2px solid var(--line); padding-left:10px; color:var(--muted); font:11.5px/1.6 ui-monospace,"SF Mono",monospace; }
+  .activity div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .error { color:var(--danger); }
+  .warning { color:var(--warn); font-size:12px; margin-top:7px; }
+
+  .composer-wrap { padding:12px max(18px,6%); border-top:1px solid var(--line); background:color-mix(in srgb,var(--panel) 94%,var(--bg)); }
+  .composer { max-width:900px; margin:auto; border:1px solid var(--line); background:var(--panel); border-radius:13px; padding:10px; box-shadow:0 5px 18px rgba(15,23,42,.06); }
+  textarea { width:100%; min-height:52px; max-height:180px; resize:none; border:0; outline:0; background:transparent; color:var(--text); padding:2px 4px; line-height:1.55; }
+  textarea::placeholder { color:var(--muted); }
+  .composer-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:6px; }
+  .context { color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .send { padding:7px 15px; background:var(--text); color:var(--panel); font-weight:650; }
+  .send:disabled { opacity:.35; cursor:not-allowed; }
+  .hint { max-width:900px; margin:6px auto 0; color:var(--muted); font-size:10.5px; text-align:center; }
+
+  @media (max-width:800px) {
+    .layout { grid-template-columns:1fr; height:calc(100vh - 62px); padding:0; }
+    .sidebar { display:none; }
+    .chat { border:0; border-radius:0; min-height:calc(100vh - 62px); }
+    .runtime span { display:none; }
+    .starters { grid-template-columns:1fr; }
+    .messages { padding:20px 15px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">SEO</div>
+      <div><h1>Claude SEO AI 工作台</h1><p>直接描述目标，Codex 会读取技能并完成任务</p></div>
+    </div>
+    <div class="runtime" id="runtime"><i class="dot"></i><span>正在检测 Codex…</span></div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="side-head"><strong>专业技能</strong><button class="new-chat" id="newChat">＋ 新对话</button></div>
+      <input class="search" id="skillSearch" placeholder="搜索技能…">
+      <div class="skill-list" id="skillList"></div>
+      <div class="side-note">不选择技能时，Codex 会根据你的目标自动决定工作流。选择技能只代表优先使用，不会限制必要工具。</div>
+    </aside>
+
+    <section class="chat">
+      <div class="chat-head">
+        <div class="chat-title"><strong id="chatTitle">自由对话</strong><span id="threadLabel">新会话</span></div>
+        <div class="controls">
+          <select id="sandbox" title="Codex 文件权限">
+            <option value="read-only">只读分析</option>
+            <option value="workspace-write">允许修改项目文件</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="messages" id="messages">
+        <div class="welcome" id="welcome">
+          <div class="mark">AI</div>
+          <h2>你想完成什么？</h2>
+          <p>不用先研究技能菜单。直接描述网站、文章、目标和要求，AI 会选择合适的 SEO 工作流并执行。</p>
+          <div class="starters">
+            <button class="starter" data-prompt="帮我对这个网站做一次完整的 SEO 审计，并按优先级给出可执行的修改建议：">
+              <strong>完整 SEO 审计</strong><span>分析网站并输出优先级清单</span>
+            </button>
+            <button class="starter" data-prompt="检查项目中的文章，找出 SEO、可读性和 E-E-A-T 问题。先分析，不要修改文件。">
+              <strong>检查本地文章</strong><span>读取项目内容并给出建议</span>
+            </button>
+            <button class="starter" data-prompt="请优化项目中的文章内容。先说明准备修改哪些文件和原因，确认范围后再修改。">
+              <strong>优化文章内容</strong><span>先确认范围，再修改项目文件</span>
+            </button>
+            <button class="starter" data-prompt="围绕这个主题制定关键词和内容集群计划：">
+              <strong>关键词与内容规划</strong><span>构建主题集群和执行路线</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer-wrap">
+        <div class="composer">
+          <textarea id="prompt" rows="2" placeholder="描述你的目标，例如：分析这个网址，或者优化项目里的三篇文章…"></textarea>
+          <div class="composer-foot">
+            <div class="context" id="context">自动选择 SEO 技能 · 当前仅分析，不修改文件</div>
+            <button class="send" id="send">发送</button>
+          </div>
+        </div>
+        <div class="hint">AI 可能运行脚本或读取文件。启用写入权限时，请检查最终修改结果。</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = selector => document.querySelector(selector);
+const state = {
+  skills: [], selectedSkill: "", threadId: localStorage.getItem("claudeSeoThread") || "",
+  running: false, messages: JSON.parse(localStorage.getItem("claudeSeoMessages") || "[]")
+};
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>'"]/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[char]);
+}
+
+async function getJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`请求失败：${response.status}`);
+  return response.json();
+}
+
+function saveConversation() {
+  localStorage.setItem("claudeSeoMessages", JSON.stringify(state.messages.slice(-60)));
+  if (state.threadId) localStorage.setItem("claudeSeoThread", state.threadId);
+  else localStorage.removeItem("claudeSeoThread");
+}
+
+function setRuntime(runtime) {
+  const ok = runtime.codex_available && runtime.logged_in;
+  $("#runtime").innerHTML = `<i class="dot ${ok ? "ok" : "bad"}"></i><span>${escapeHtml(ok ? `${runtime.codex_version} · ${runtime.model}` : runtime.login_status)}</span>`;
+  if (!ok) $("#prompt").placeholder = "Codex 尚未登录，请先在终端运行 codex login";
+}
+
+function renderSkills() {
+  const query = $("#skillSearch").value.trim().toLowerCase();
+  const filtered = state.skills.filter(skill => !query || skill.name.toLowerCase().includes(query) || skill.description.toLowerCase().includes(query));
+  $("#skillList").innerHTML = `<button class="skill ${state.selectedSkill ? "" : "on"}" data-skill="">
+    <div class="skill-name">自动选择</div><div class="skill-desc">让 AI 根据目标决定工作流</div></button>` + filtered.map(skill => `
+    <button class="skill ${state.selectedSkill === skill.name ? "on" : ""}" data-skill="${escapeHtml(skill.name)}" title="${escapeHtml(skill.description)}">
+      <div class="skill-name">${escapeHtml(skill.name)}</div><div class="skill-desc">${escapeHtml(skill.description || skill.category)}</div>
+    </button>`).join("");
+  $("#skillList").querySelectorAll(".skill").forEach(button => button.onclick = () => {
+    state.selectedSkill = button.dataset.skill;
+    $("#chatTitle").textContent = state.selectedSkill || "自由对话";
+    renderSkills(); updateContext(); $("#prompt").focus();
+  });
+}
+
+function updateContext() {
+  const skill = state.selectedSkill ? `优先使用 ${state.selectedSkill}` : "自动选择 SEO 技能";
+  const permission = $("#sandbox").value === "workspace-write" ? "允许修改项目文件" : "当前仅分析，不修改文件";
+  $("#context").textContent = `${skill} · ${permission}`;
+  $("#threadLabel").textContent = state.threadId ? `会话 ${state.threadId.slice(0, 8)}…` : "新会话";
+}
+
+function renderMessages() {
+  const container = $("#messages");
+  if (!state.messages.length) {
+    $("#welcome")?.removeAttribute("hidden");
+    return;
+  }
+  container.innerHTML = state.messages.map(message => `
+    <div class="message ${message.role}">
+      <div class="avatar">${message.role === "user" ? "你" : "AI"}</div>
+      <div><div class="who">${message.role === "user" ? "你" : "Codex"}</div>
+        <div class="bubble ${message.error ? "error" : ""}">${escapeHtml(message.text)}</div>
+      </div>
+    </div>`).join("");
+  container.scrollTop = container.scrollHeight;
+}
+
+function addMessage(role, text, extra = {}) {
+  state.messages.push({role, text, ...extra});
+  saveConversation(); renderMessages();
+}
+
+function createPending() {
+  const wrapper = document.createElement("div");
+  wrapper.className = "message assistant";
+  wrapper.innerHTML = `<div class="avatar">AI</div><div><div class="who">Codex</div>
+    <div class="bubble pending"><span class="pending-text">正在理解任务</span><span class="thinking"><i></i><i></i><i></i></span></div>
+    <div class="activity"></div><div class="warning"></div></div>`;
+  $("#messages").appendChild(wrapper);
+  $("#messages").scrollTop = $("#messages").scrollHeight;
+  return wrapper;
+}
+
+function handleEvent(event, pending, result) {
+  if (event.type === "thread") {
+    state.threadId = event.thread_id; saveConversation(); updateContext();
+  } else if (event.type === "status") {
+    pending.querySelector(".pending-text").textContent = event.text;
+  } else if (event.type === "activity") {
+    const row = document.createElement("div");
+    row.textContent = `${event.kind === "command" ? "›" : "•"} ${event.text}`;
+    row.title = event.text;
+    pending.querySelector(".activity").appendChild(row);
+    if (pending.querySelectorAll(".activity div").length > 8) pending.querySelector(".activity div").remove();
+    $("#messages").scrollTop = $("#messages").scrollHeight;
+  } else if (event.type === "assistant") {
+    result.text = event.text;
+  } else if (event.type === "warning") {
+    pending.querySelector(".warning").textContent = event.message;
+  } else if (event.type === "error") {
+    result.error = event.message || "任务执行失败";
+  }
+}
+
+async function sendMessage(prefill) {
+  if (state.running) return;
+  if (typeof prefill === "string") $("#prompt").value = prefill;
+  const message = $("#prompt").value.trim();
+  if (!message) return;
+
+  state.running = true;
+  $("#send").disabled = true;
+  $("#prompt").disabled = true;
+  addMessage("user", message);
+  $("#prompt").value = "";
+  const pending = createPending();
+  const result = {text: "", error: ""};
+
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({message, thread_id: state.threadId, skill: state.selectedSkill, sandbox: $("#sandbox").value})
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || `请求失败：${response.status}`);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const {value, done} = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), {stream: !done});
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+      for (const line of lines) if (line.trim()) handleEvent(JSON.parse(line), pending, result);
+      if (done) break;
+    }
+    if (buffer.trim()) handleEvent(JSON.parse(buffer), pending, result);
+  } catch (error) {
+    result.error = error.message;
+  } finally {
+    pending.remove();
+    addMessage("assistant", result.error || result.text || "任务已结束，但 Codex 没有返回文字结果。", {error: Boolean(result.error)});
+    state.running = false;
+    $("#send").disabled = false;
+    $("#prompt").disabled = false;
+    $("#prompt").focus();
+  }
+}
+
+function newConversation() {
+  if (state.running && !confirm("任务仍在运行，确定清空当前对话吗？")) return;
+  state.threadId = ""; state.messages = []; state.selectedSkill = "";
+  saveConversation();
+  location.reload();
+}
+
+async function init() {
+  try {
+    const [runtime, skills] = await Promise.all([getJson("/api/runtime"), getJson("/api/skills")]);
+    setRuntime(runtime); state.skills = skills.skills; renderSkills();
+  } catch (error) {
+    $("#runtime").innerHTML = `<i class="dot bad"></i><span>${escapeHtml(error.message)}</span>`;
+  }
+  updateContext();
+  if (state.messages.length) renderMessages();
+  $("#skillSearch").addEventListener("input", renderSkills);
+  $("#sandbox").addEventListener("change", updateContext);
+  $("#newChat").onclick = newConversation;
+  $("#send").onclick = () => sendMessage();
+  $("#prompt").addEventListener("keydown", event => {
+    if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); }
+  });
+  $("#prompt").addEventListener("input", event => {
+    event.target.style.height = "auto";
+    event.target.style.height = Math.min(event.target.scrollHeight, 180) + "px";
+  });
+  document.querySelectorAll(".starter").forEach(button => button.onclick = () => {
+    $("#prompt").value = button.dataset.prompt; $("#prompt").focus();
+  });
+}
+
+init();
+</script>
+</body>
+</html>

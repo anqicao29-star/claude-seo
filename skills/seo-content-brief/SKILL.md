@@ -1,12 +1,13 @@
 ---
 name: seo-content-brief
 description: >
-  Generate competitive SEO content briefs with per-section word counts,
-  competitor scoring, keyword density guidance, and page-type templates.
-  Supports both new page briefs and improve-existing-page briefs.
-  Use when user says "content brief", "write a brief", "content outline",
-  "blog brief", "service page brief", "brief for", "writing brief",
-  "content plan", or "outline for".
+  生成有竞争力的 SEO 内容简报（Content Brief），包含分章节字数分配、竞品评分、
+  关键词密度指导，以及分页面类型的模板。同时支持全新页面的写作简报和现有页面
+  的优化简报。当用户提到"内容简报"、"写一份 brief"、"内容大纲"、"博客简报"、
+  "服务页简报"、"给……写个 brief"、"写作提纲"、"内容规划"、"给……做个大纲"，
+  或说 "content brief", "write a brief", "content outline", "blog brief",
+  "service page brief", "brief for", "writing brief", "content plan",
+  "outline for" 时使用本技能。
 user-invocable: true
 argument-hint: "[url-or-keyword] [page-type]"
 license: MIT
@@ -17,158 +18,170 @@ metadata:
   category: seo
 ---
 
-# SEO Content Brief Generator
+# SEO 内容简报生成器
 
-Generate research-backed content briefs that help writers produce pages capable of outranking current top results. Briefs include competitor analysis with gap scoring, per-section word count breakdowns, keyword placement rules, and page-type-specific templates.
+生成有研究依据的内容简报，帮助撰稿人写出能够超越当前排名前列结果的页面。简报
+涵盖带差距评分的竞品分析、分章节字数拆解、关键词布局规则，以及按页面类型定制
+的模板。
 
-## Process
+## 处理流程
 
-### 1. Determine Brief Mode
+### 1. 确定简报模式
 
-**Improve mode** (existing page URL provided):
-- Fetch the existing page content and structure
-- Identify what is already strong (keep it)
-- Identify missing, thin, or outdated sections
-- Distinguish "keep/strengthen" vs "add new" sections in the outline
-- Do not recommend a full rewrite when targeted improvements will win
+**优化模式**（提供了现有页面 URL）：
+- 抓取现有页面的内容与结构
+- 找出已经做得好的地方（予以保留）
+- 找出缺失、单薄或过时的章节
+- 在大纲中明确区分「保留/加强」与「新增」的章节
+- 如果针对性改进就能取胜，不要建议整体重写
 
-**New page mode** (keyword or topic provided, no existing page):
-- Use the target site's homepage or sitemap for business context only
-- Build the brief from scratch for a new page
-- Focus on competitive gaps the new page can fill
+**新建模式**（提供了关键词或主题，没有现有页面）：
+- 仅将目标站点的首页或站点地图用作了解业务背景的参考
+- 从零开始搭建这份新页面的简报
+- 聚焦新页面能够填补的竞争差距
 
-### 2. Fetch Context
+### 2. 获取背景信息
 
-- Fetch the target URL or homepage to understand the business
-- Fetch the sitemap to discover all existing pages, categories, and services
-- This context is critical for the Website Relevance Rule (see below)
+- 抓取目标 URL 或首页以了解该业务
+- 抓取站点地图，梳理出所有现有页面、分类与服务
+- 这些背景信息对下文的「站点相关性规则」至关重要
 
-### 3. Analyse SERPs
+### 3. 分析 SERP
 
-- Identify the top 5 ranking pages for the target keyword
-- Filter out non-competitors (Wikipedia, Reddit, Pinterest, Amazon, YouTube, government sites, SEO tool pages, job boards, directories, news aggregators, social platforms). See `references/excluded-domains.md` for the full list.
-- Score each real competitor: Depth (1-10), Formatting (1-10), SEO (1-10), UX (1-10)
-- Identify three gap types:
-  - **Topic gaps:** subtopics competitors miss entirely
-  - **Depth gaps:** topics covered but shallow
-  - **Quality gaps:** outdated info, no expert perspective, poor formatting
-- Calculate gap priority: `Impact x Competitive Advantage / Effort`
+- 找出目标关键词排名前 5 的页面
+- 过滤掉非真正竞品的结果（Wikipedia、Reddit、Pinterest、Amazon、YouTube、政府网站、
+  SEO 工具页面、招聘网站、目录站、新闻聚合站、社交平台）。完整名单见
+  `references/excluded-domains.md`。
+- 对每个真实竞品打分：内容深度（1-10）、排版（1-10）、SEO（1-10）、体验（1-10）
+- 识别三类差距：
+  - **话题差距：** 竞品完全没有覆盖的子话题
+  - **深度差距：** 有覆盖但写得浅
+  - **质量差距：** 信息过时、缺少专家视角、排版差
+- 计算差距优先级：`影响力 x 竞争优势 / 实施难度`
 
-### 4. Classify Search Intent
+### 4. 判定搜索意图
 
-- **Informational:** user wants to learn (guides, how-tos, definitions)
-- **Commercial:** user is researching before buying (comparisons, reviews, "best X")
-- **Transactional:** user is ready to act (buy, book, enquire, sign up)
-- **Navigational:** user is looking for a specific site or page
+- **信息型：** 用户想学习（指南、how-to、定义解释）
+- **商业型：** 用户在购买前做研究（对比、评测、"最好的 X"）
+- **交易型：** 用户已准备行动（购买、预订、咨询、注册）
+- **导航型：** 用户在找特定网站或页面
 
-Identify what SERP format Google rewards for this query: long-form guide, listicle, comparison table, landing page, FAQ, video, local pack.
+判断 Google 针对该查询词奖励的 SERP 格式：长文指南、清单体、对比表格、落地页、
+FAQ、视频、本地结果包。
 
-### 5. Build the Brief
+### 5. 搭建简报
 
-Apply the page-type template from `references/page-type-templates.md`, then customise based on competitor gaps and search intent.
+先套用 `references/page-type-templates.md` 中对应的页面类型模板，再根据竞品差
+距与搜索意图做定制化调整。
 
-## Critical Rules
+## 核心规则
 
-### Website Relevance Rule
+### 站点相关性规则
 
-Every heading, subtopic, keyword, and FAQ you suggest MUST be something the target website can credibly write about based on its actual services or products.
+你建议的每一个标题、子话题、关键词和 FAQ，都必须是目标网站基于其实际业务或
+产品能够言之有物地写出来的内容。
 
-- Read the site's homepage and sitemap to understand what it does
-- Do not borrow competitor structure if those sections cover things this site does not offer
-- Before each suggestion, ask: "Can this website actually deliver on this content?" If no, remove it.
+- 阅读该站点的首页和站点地图，了解它实际提供什么
+- 如果竞品的某些章节涉及本站点不提供的内容，不要照搬那套结构
+- 每提一条建议前先自问："这个网站真的能兑现这部分内容吗？"如果不能，就去掉它。
 
-### Site Structure Coverage Rule
+### 站点结构覆盖规则
 
-When briefing a hub, overview, category, or "types of" page:
-- The outline MUST reference every relevant product category, service, or sub-page that exists on the site
-- Do not invent categories that don't exist, do not leave out categories that do exist
-- Each category should appear as its own section with an internal link suggestion
-- This ensures the page acts as a proper hub linking to all child pages
+在为枢纽页、总览页、分类页或"类型汇总"页写简报时：
+- 大纲必须涵盖站点上所有相关的产品分类、服务或子页面
+- 不要臆造网站上不存在的分类，也不要遗漏已经存在的分类
+- 每个分类都应作为独立章节出现，并附带内链建议
+- 这样能确保该页面真正发挥枢纽作用，链接到所有子页面
 
-For non-hub pages (single service page, blog post), use site structure to suggest relevant internal links but do not force every category into the outline.
+对于非枢纽页面（单个服务页、博客文章），可以利用站点结构给出相关内链建议，
+但不必强行把每个分类都塞进大纲。
 
-### Output Language Rules
+### 输出语言规则
 
-- Never mention researcher names, framework names, or tool names in the output (no "Ben Goodey method", "Frase.io formula", "Princeton GEO", "Clearscope", "Backlinko")
-- These are internal thinking tools only. The output must read as plain, professional advice.
-- Write for a business owner or content writer, not an SEO academic
+- 输出中绝不提及研究者姓名、框架名称或工具名称（例如不要出现 "Ben Goodey
+  method"、"Frase.io formula"、"Princeton GEO"、"Clearscope"、"Backlinko"）
+- 这些只是内部的思考工具，不应出现在交付内容中。输出必须读起来像专业、朴实
+  的建议
+- 面向的读者是企业主或内容撰稿人，而不是 SEO 学术研究者
 
-## Keyword Density and Placement
+## 关键词密度与布局
 
-Read `references/keyword-density.md` for the full rules. Summary:
+完整规则见 `references/keyword-density.md`。要点摘要：
 
-**Primary keyword density:** 0.5% to 2.0% of total word count.
-- Above 2% requires review. Above 3% risks keyword stuffing penalties.
-- First 1-2 mentions carry the most SEO weight. Diminishing returns after.
-- For a 1,000-word article at 1-2%: roughly 10-20 total appearances including headings, body, and alt text.
+**主关键词密度：** 占总字数的 0.5% 到 2.0%。
+- 超过 2% 需要复核。超过 3% 有关键词堆砌被惩罚的风险。
+- 前 1-2 次出现承载的 SEO 权重最大，之后收益递减。
+- 以 1,000 字文章、密度 1-2% 计：标题、正文、alt 文本加起来大约共出现 10-20 次。
 
-**Primary keyword MUST appear in:**
-1. Title tag (near the front)
-2. H1 tag (near the front)
-3. URL slug
-4. Meta description
-5. First paragraph / first 100 words
-6. At least one image alt text
+**主关键词必须出现在：**
+1. Title 标签中（靠前位置）
+2. H1 标签中（靠前位置）
+3. URL slug 中
+4. Meta 描述中
+5. 首段/前 100 字内
+6. 至少一处图片 alt 文本中
 
-**Primary keyword does NOT need to appear in:**
-- Every H2 or H3 (subtopics carry context naturally if H1 covers it)
-- Every paragraph or section
+**主关键词不需要出现在：**
+- 每一个 H2 或 H3 中（只要 H1 覆盖了，子话题自然带出上下文）
+- 每一段或每个小节中
 
-**Secondary keywords:**
-- 5-8 closely related supporting terms distributed through body content
-- 10-15 broader semantic terms covering related concepts
-- Use in H2-H6 subheadings where natural
-- Synonyms improve readability and do NOT count toward keyword density
+**次级关键词：**
+- 5-8 个密切相关的支撑词，分布在正文各处
+- 10-15 个覆盖相关概念的更宽泛语义词
+- 在 H2-H6 副标题中自然使用
+- 同义词有助于提升可读性，且不计入关键词密度
 
-**Per-section keyword guidance:** For each section in the outline, specify:
-- Which keyword (primary or secondary) belongs in the heading
-- Whether the body should include the primary keyword or a variation
-- Example: "Use secondary keyword 'structural drafting services' in H2. Body: mention primary keyword once."
+**分章节关键词指导：** 针对大纲中的每个章节，注明：
+- 标题里应放主关键词还是次级关键词
+- 正文是应包含主关键词原词还是变体形式
+- 示例："在 H2 中使用次级关键词『structural drafting services』。正文中提及
+  一次主关键词。"
 
-**Distribution:** Spread the primary keyword evenly. Do not front-load or cluster in one section.
+**分布原则：** 让主关键词均匀分布，不要前置堆积或集中在某一个章节。
 
-## Meta Tag Rules
+## Meta 标签规则
 
-**Title tag:**
-- 50-60 characters (never under 50, never over 60)
-- Primary keyword first, brand name last
-- Separate brand with a pipe or dash (match the site's existing pattern)
-- Lead with outcomes, numbers, or specifics when possible
+**Title 标签：**
+- 50-60 字符（不少于 50，不超过 60）
+- 主关键词在前，品牌名放最后
+- 用竖线或短横线隔开品牌名（与站点现有格式保持一致）
+- 尽量以结果、数字或具体信息开头
 
-**Meta description:**
-- 130-150 characters (never under 130, never over 150)
-- Active voice, expand on the title with USPs and specifics
-- End with a call to action
-- No brand name at the end (it's already in the title)
-- No quotes (Google truncates at quotes)
+**Meta 描述：**
+- 130-150 字符（不少于 130，不超过 150）
+- 使用主动语态，围绕标题展开卖点和具体信息
+- 以行动号召结尾
+- 末尾不要重复品牌名（标题里已经有了）
+- 不要使用引号（Google 会在引号处截断）
 
-## Information Gain (non-negotiable)
+## 信息增量（不可妥协）
 
-Every brief must specify EXACTLY what new value this content adds that no current ranking page provides. Must be specific:
-- Proprietary data or original research
-- Case studies with real outcomes
-- Expert quotes or first-hand experience
-- Original synthesis or unique framework
-- NOT "more detail" or "better formatting"
+每份简报都必须明确说明：相比当前所有排名页面，这篇内容能带来什么当前市面上
+没有的新价值。必须具体：
+- 独家数据或原创调研
+- 带真实结果的案例研究
+- 专家引语或一手经验
+- 原创的整合观点或独特框架
+- 不能写"更详细"或"排版更好"这种空泛说法
 
-## E-E-A-T Requirements
+## E-E-A-T 要求
 
-List the exact trust signals this content needs:
-- Author credentials and bio relevant to the topic
-- Expert quotes or citations from authoritative sources
-- Cited studies, data, or statistics with dates
-- Last updated date
-- Especially critical for YMYL topics (health, finance, legal, safety)
+列出这篇内容需要的具体信任信号：
+- 与主题相关的作者资质与简介
+- 来自权威来源的专家引语或引用
+- 带日期的引用研究、数据或统计
+- 最后更新日期
+- 对于 YMYL 话题（健康、金融、法律、安全）尤其关键
 
-## Internal Linking
+## 内链建议
 
-- Suggest 3-5 specific internal link opportunities with anchor text
-- Specify whether the page is a hub (links out to cluster pages) or spoke (links to pillar page)
-- Use the site structure from the sitemap to find real link targets
+- 给出 3-5 个具体的内链机会，附锚文本
+- 说明该页面是枢纽页（链接到集群页面）还是子页面（链接到支柱页面）
+- 利用站点地图中的站点结构找到真实可用的链接目标
 
-## Output Format
+## 输出格式
 
-Always output in this exact structure:
+始终按以下结构输出：
 
 ```
 ## Content Brief: [Primary Keyword]
@@ -214,9 +227,10 @@ Always output in this exact structure:
 [3-5 suggestions with anchor text and target URL]
 ```
 
-## Outline-Only Mode
+## 仅大纲模式
 
-When the user asks for "just an outline" or "content outline" instead of a full brief, skip the Competitor Analysis table, Content Gaps section, Information Gain section, and E-E-A-T section. Output only:
+当用户要求"只要大纲"或"内容大纲"而非完整简报时，跳过竞品分析表格、内容差距
+章节、信息增量章节和 E-E-A-T 章节。仅输出：
 
 ```
 ## Content Outline: [Primary Keyword]
@@ -228,20 +242,26 @@ When the user asks for "just an outline" or "content outline" instead of a full 
 [Full H2/H3 outline with word counts, format notes, FS targets, keyword guidance, and a 1-2 sentence writing note per section]
 ```
 
-## DataForSEO Integration (Optional)
+## DataForSEO 集成（可选）
 
-If DataForSEO MCP tools are available, use `serp_google_organic_live_advanced` for real SERP data and competitor analysis, `kw_data_google_ads_search_volume` for keyword volume, `dataforseo_labs_bulk_keyword_difficulty` for difficulty scores, `dataforseo_labs_search_intent` for intent classification, and `on_page_content_parsing_live` for competitor content extraction.
+若 DataForSEO MCP 工具可用，可使用 `serp_google_organic_live_advanced` 获取真实
+SERP 数据与竞品分析，`kw_data_google_ads_search_volume` 获取关键词搜索量，
+`dataforseo_labs_bulk_keyword_difficulty` 获取难度分数，
+`dataforseo_labs_search_intent` 做意图分类，以及
+`on_page_content_parsing_live` 提取竞品内容。
 
-## Ahrefs Integration (Optional)
+## Ahrefs 集成（可选）
 
-If Ahrefs MCP tools are available, use `keywords-explorer-overview` for keyword volume and difficulty, `serp-overview` for SERP analysis, `site-explorer-organic-keywords` for existing keyword rankings, and `site-explorer-top-pages` for competitor page performance.
+若 Ahrefs MCP 工具可用，可使用 `keywords-explorer-overview` 获取关键词搜索量与
+难度，`serp-overview` 做 SERP 分析，`site-explorer-organic-keywords` 查看现有
+关键词排名，`site-explorer-top-pages` 分析竞品页面表现。
 
-## Error Handling
+## 错误处理
 
-| Scenario | Action |
-|----------|--------|
-| Target URL unreachable | Report the error. Do not guess page content. Ask the user to verify the URL. |
-| No competitors found after filtering | Broaden the search to include partial-match competitors. Note the thin competitive landscape in the brief. |
-| Sitemap not found | Proceed without site structure context. Note that internal linking suggestions may be incomplete. |
-| Page type not specified | Auto-detect from the keyword intent and SERP format. State the detected type in the brief. |
-| Target word count not specified | Use competitor average as the baseline. Note this in the outline. |
+| 场景 | 处理方式 |
+|------|--------|
+| 目标 URL 无法访问 | 报告错误，不要臆测页面内容，请用户核实 URL |
+| 过滤后没有找到竞品 | 放宽范围，纳入部分匹配的竞品，并在简报中注明该赛道竞争样本稀薄 |
+| 未找到站点地图 | 在没有站点结构背景的情况下继续，注明内链建议可能不完整 |
+| 未指定页面类型 | 根据关键词意图和 SERP 格式自动判断，在简报中说明识别出的类型 |
+| 未指定目标字数 | 以竞品平均字数为基准，并在大纲中注明 |

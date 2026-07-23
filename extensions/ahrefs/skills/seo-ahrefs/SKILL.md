@@ -1,6 +1,6 @@
 ---
 name: seo-ahrefs
-description: Ahrefs API analyst (extension). Reads referring domains, backlinks, organic keywords, and content explorer data via the official @ahrefs/mcp@0.0.11 server. Pairs with seo-backlinks for multi-source confidence weighting.
+description: Ahrefs API 数据分析师（扩展）。通过官方 @ahrefs/mcp@0.0.11 服务器读取外链来源域名、反向链接、自然关键词及内容浏览器（Content Explorer）数据。可与 seo-backlinks 搭配，实现多来源置信度加权。Ahrefs API analyst, referring domains, backlinks, organic keywords.
 metadata:
   version: "2.2.0"
 compatibility: "Requires the official @ahrefs/mcp@0.0.11 server (installed by extensions/ahrefs/install.sh)."
@@ -8,45 +8,44 @@ compatibility: "Requires the official @ahrefs/mcp@0.0.11 server (installed by ex
 
 # seo-ahrefs
 
-Live Ahrefs data via the official `@ahrefs/mcp@0.0.11` server.
+通过官方 `@ahrefs/mcp@0.0.11` 服务器获取 Ahrefs 实时数据。
 
-## Prerequisites
+## 前置条件
 
-- Run `extensions/ahrefs/install.sh` (Linux/macOS) or `install.ps1` (Windows) before using this skill.
-- An Ahrefs API token (https://ahrefs.com/api).
-- Node 18+ on `$PATH` for the MCP server.
+- 使用本技能前，请先运行 `extensions/ahrefs/install.sh`（Linux/macOS）或 `install.ps1`（Windows）。
+- 需要一个 Ahrefs API token（https://ahrefs.com/api）。
+- MCP 服务器需要 `$PATH` 中存在 Node 18+。
 
-Before calling any Ahrefs tool, verify the MCP is connected by checking
-that any Ahrefs MCP tool is available in this session. If tools are
-not available, tell the user the extension is not installed and
-provide the install command above.
+在调用任何 Ahrefs 工具前，请先确认本会话中已能使用某个 Ahrefs MCP
+工具，以此验证 MCP 已连接。若工具不可用，请告知用户该扩展尚未安装，
+并提供上方的安装命令。
 
-## Routing
+## 路由
 
-| Command | Action |
+| 命令 | 作用 |
 |---|---|
-| `/seo ahrefs metrics <url>` | Domain / URL rating, referring domain count, organic traffic estimate |
-| `/seo ahrefs backlinks <url>` | Top referring domains, anchor distribution, follow/nofollow ratio |
-| `/seo ahrefs organic <url>` | Organic keywords, ranking distribution, traffic by country |
-| `/seo ahrefs content <topic>` | Content Explorer top results, social shares, referring domains |
+| `/seo ahrefs metrics <url>` | 域名/URL 评级、外链来源域名数量、自然流量估算 |
+| `/seo ahrefs backlinks <url>` | 主要外链来源域名、锚文本分布、follow/nofollow 比例 |
+| `/seo ahrefs organic <url>` | 自然关键词、排名分布、按国家划分的流量 |
+| `/seo ahrefs content <topic>` | Content Explorer 热门结果、社交分享数、外链来源域名 |
 
-## Output conventions
+## 输出规范
 
-- Cite the data source on every metric: "Ahrefs (live, confidence 1.00)".
-- When Ahrefs and Moz disagree on the same metric, trust Ahrefs and note the discrepancy in the report.
-- Toxic link assessment: combine Ahrefs Spam Score with the existing seo-backlinks Common Crawl + verify crawler signals.
+- 每项指标都要注明数据来源："Ahrefs (live, confidence 1.00)"。
+- 当 Ahrefs 与 Moz 在同一指标上出现分歧时，以 Ahrefs 为准，并在报告中注明差异。
+- 有害链接评估：将 Ahrefs Spam Score 与现有 seo-backlinks 的 Common Crawl + verify 爬虫信号结合使用。
 
-## Cross-skill delegation
+## 跨技能委派
 
-- For multi-source confidence weighting across Moz + Bing + Common Crawl + Ahrefs, hand back to `seo-backlinks`.
-- For SERP-feature analysis where Ahrefs and DataForSEO overlap, prefer DataForSEO for live SERP data.
+- 若需要跨 Moz + Bing + Common Crawl + Ahrefs 的多来源置信度加权，交回 `seo-backlinks` 处理。
+- 若涉及 Ahrefs 与 DataForSEO 重叠的 SERP 特征分析，优先使用 DataForSEO 获取实时 SERP 数据。
 
-## Cost guardrails
+## 成本护栏
 
-Ahrefs API usage is metered per unit. Before running a batch (>= 50 URLs):
+Ahrefs API 用量按单位计费。在运行批量任务（>= 50 个 URL）之前：
 
-1. Estimate cost with `python3 scripts/dataforseo_costs.py` (the cost-tracker module is generic and supports Ahrefs unit accounting).
-2. Surface the estimate to the orchestrator.
-3. Log actual cost after each call.
+1. 使用 `python3 scripts/dataforseo_costs.py` 估算成本（该成本追踪模块是通用的，支持 Ahrefs 的单位计费）。
+2. 将估算结果提交给编排器（orchestrator）。
+3. 每次调用后记录实际花费。
 
-This is the same workflow the seo-dataforseo skill uses.
+这与 seo-dataforseo 技能使用的工作流相同。

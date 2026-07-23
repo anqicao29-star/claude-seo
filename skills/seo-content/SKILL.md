@@ -1,9 +1,10 @@
 ---
 name: seo-content
 description: >
-  Content quality and E-E-A-T analysis with AI citation readiness assessment.
-  Use when user says "content quality", "E-E-A-T", "content analysis",
-  "readability check", "thin content", or "content audit".
+  内容质量与 E-E-A-T 分析，附带 AI 引用就绪度（AI citation readiness）评估。
+  当用户说"内容质量"、"content quality"、"E-E-A-T"、"内容分析"、"content analysis"、
+  "可读性检查"、"readability check"、"内容单薄"、"thin content"，或"内容审计"、
+  "content audit" 时使用本技能。
 user-invocable: true
 argument-hint: "[url]"
 license: MIT
@@ -13,186 +14,216 @@ metadata:
   category: seo
 ---
 
-# Content Quality & E-E-A-T Analysis
+# 内容质量与 E-E-A-T 分析
 
-## Google's "Who / How / Why" Test (canonical heuristic)
+## Google 的「Who / How / Why」测试（经典判断标准）
 
-Before scoring E-E-A-T sub-factors, every page audit should pass Google's
-own three-question heuristic from the helpful-content guide:
+在对 E-E-A-T 各子维度打分之前，每次页面审计都应先通过 Google 在其
+helpful-content 指南中提出的三问式判断标准：
 
-| Question | What to look for |
+| 问题 | 需要关注的信号 |
 |---|---|
-| **Who** created it? | Visible byline, author bio page, professional credentials. Required where readers expect it; non-negotiable for YMYL. |
-| **How** was it created? | Process disclosure where readers would reasonably ask — especially for AI-assisted content. Original research / first-hand evidence / lived experience. |
-| **Why** does it exist? | "To help people" rather than "to attract search clicks." Watch for niche entry without expertise, content churn for freshness signals, content written to a word-count target. |
+| **Who（谁创作的）？** | 可见的署名、作者简介页、专业资质。在读者会期待看到这些信息的场景下是必需项，对 YMYL（涉及金钱或生命健康）内容更是不可妥协的要求。 |
+| **How（如何创作的）？** | 在读者会合理产生疑问的场景下——尤其是 AI 辅助生成的内容——应披露创作过程。是否有原创研究、一手证据、亲身经历。 |
+| **Why（为何而写）？** | 应是"为了帮助用户"，而非"为了吸引搜索点击"。需警惕：缺乏专业积累就涉足某个领域、为了刷新鲜度信号而反复更新内容、为凑字数而写。 |
 
-Primary source:
+一手资料来源：
 https://developers.google.com/search/docs/fundamentals/creating-helpful-content
 
-When all three answers are weak, the page is at risk under the core ranking
-system's helpfulness signals (formerly the standalone Helpful Content System,
-merged into core during the March 2024 update).
+如果这三个问题的答案都很薄弱，那么该页面在核心排名系统的"有用性"信号评估下
+就存在风险（该系统曾是独立的 Helpful Content System，已在 2024 年 3 月的
+核心算法更新中并入核心排名系统）。
 
-## E-E-A-T Framework (updated Sept 2025 QRG)
+## E-E-A-T 框架（2025 年 9 月 QRG 更新）
 
-Read `skills/seo/references/eeat-framework.md` for full criteria.
+完整评判标准请阅读 `skills/seo/references/eeat-framework.md`。
 
-### Experience (first-hand signals)
-- Original research, case studies, before/after results
-- Personal anecdotes, process documentation
-- Unique data, proprietary insights
-- Photos/videos from direct experience
+### Experience（一手经验信号）
+- 原创研究、案例研究、前后对比结果
+- 个人经历、创作过程记录
+- 独家数据、专有洞察
+- 来自亲身经历的照片/视频
 
-### Expertise
-- Author credentials, certifications, bio
-- Professional background relevant to topic
-- Technical depth appropriate for audience
-- Accurate, well-sourced claims
+### Expertise（专业性）
+- 作者资质、认证、个人简介
+- 与主题相关的专业背景
+- 与目标受众相匹配的技术深度
+- 准确且有据可查的论述
 
-### Authoritativeness
-- External citations, backlinks from authoritative sources
-- Brand mentions, industry recognition
-- Published in recognized outlets
-- Cited by other experts
+### Authoritativeness（权威性）
+- 来自权威站点的外部引用、外链
+- 品牌提及、行业认可
+- 在知名媒体上发表
+- 被其他专家引用
 
-### Trustworthiness
-- Contact information, physical address
-- Privacy policy, terms of service
-- Customer testimonials, reviews
-- Date stamps, transparent corrections
-- Secure site (HTTPS)
+### Trustworthiness（可信度）
+- 联系方式、实体地址
+- 隐私政策、服务条款
+- 用户评价、评论
+- 时间戳、透明的勘误机制
+- 站点安全（HTTPS）
 
-## Content Metrics
+## 内容指标
 
-### Word Count Analysis
-Compare against page type minimums:
-| Page Type | Minimum |
+### 字数分析
+对照页面类型的最低字数标准：
+| 页面类型 | 最低字数 |
 |-----------|---------|
-| Homepage | 500 |
-| Service page | 800 |
-| Blog post | 1,500 |
-| Product page | 300+ (400+ for complex products) |
-| Location page | 500-600 |
+| 首页 | 500 |
+| 服务页 | 800 |
+| 博客文章 | 1,500 |
+| 产品页 | 300 以上（复杂产品需 400 以上） |
+| 地区/门店页 | 500-600 |
 
-> **Important:** These are **topical coverage floors**, not targets. Google has confirmed word count is NOT a direct ranking factor. The goal is comprehensive topical coverage; a 500-word page that thoroughly answers the query will outrank a 2,000-word page that doesn't. Use these as guidelines for adequate coverage depth, not rigid requirements.
+> **重要提示：** 这些是**话题覆盖度的底线**，而非目标值。Google 已明确表示字数
+> 本身并非直接排名因素。核心目标是全面覆盖话题：一篇 500 字但完整回答了用户
+> 查询的页面，排名会优于一篇 2000 字却没答到点子上的页面。请将这些数值视为
+> 内容覆盖深度是否充分的参考基准，而非硬性要求。
 
-### Readability
-- Flesch Reading Ease: target 60-70 for general audience
+### 可读性
+- Flesch 阅读易读度（Flesch Reading Ease）：面向大众读者的目标区间为 60-70
 
-> **Note:** Flesch Reading Ease is a useful proxy for content accessibility but is NOT a direct Google ranking factor. John Mueller has confirmed Google does not use basic readability scores for ranking. Yoast deprioritized Flesch scores in v19.3. Use readability analysis as a content quality indicator, not as an SEO metric to optimize directly.
-- Grade level: match target audience
-- Sentence length: average 15-20 words
-- Paragraph length: 2-4 sentences
+> **说明：** Flesch 阅读易读度是衡量内容易读性的有用参考指标，但并**非** Google
+> 的直接排名因素。John Mueller 已确认 Google 不会用基础的可读性分数来做排名。
+> Yoast 也在 v19.3 版本中降低了 Flesch 分数的权重。请将可读性分析作为内容质量
+> 的参考指标，而非需要直接优化的 SEO 指标。
+- 阅读年级水平：与目标受众相匹配
+- 句子长度：平均 15-20 词
+- 段落长度：2-4 句
 
-### Keyword Optimization
-- Primary keyword in title, H1, first 100 words
-- Natural density (1-3%)
-- Semantic variations present
-- No keyword stuffing
+### 关键词优化
+- 核心关键词出现在 title、H1、正文前 100 词内
+- 自然密度（1%-3%）
+- 存在语义变体
+- 无关键词堆砌
 
-### Content Structure
-- Logical heading hierarchy (H1 -> H2 -> H3)
-- Scannable sections with descriptive headings
-- Bullet/numbered lists where appropriate
-- Table of contents for long-form content
+### 内容结构
+- 逻辑清晰的标题层级（H1 -> H2 -> H3）
+- 可扫读的分段，配以描述性标题
+- 适当使用项目符号/编号列表
+- 长篇内容配有目录
 
-### Multimedia
-- Relevant images with proper alt text
-- Videos where appropriate
-- Infographics for complex data
-- Charts/graphs for statistics
+### 多媒体
+- 配有合理 alt 文本的相关图片
+- 适当位置使用视频
+- 复杂数据配信息图
+- 统计数据配图表
 
-### Internal Linking
-- 3-5 relevant internal links per 1000 words
-- Descriptive anchor text
-- Links to related content
-- No orphan pages
+### 内链
+- 每 1000 字配 3-5 个相关内链
+- 使用描述性锚文本
+- 链接到相关内容
+- 无孤立页面
 
-### External Linking
-- Cite authoritative sources
-- Open in new tab for user experience
-- Reasonable count (not excessive)
+### 外链
+- 引用权威信息来源
+- 出于用户体验考虑，新标签页打开
+- 数量合理（不过度）
 
-## AI Content Assessment (Sept 2025 QRG addition)
+## AI 内容评估（2025 年 9 月 QRG 新增）
 
-Google's raters now formally assess whether content appears AI-generated.
+Google 的评估人员（raters）现已正式将内容是否疑似 AI 生成纳入评估范围。
 
-### Acceptable AI Content
-- Demonstrates genuine E-E-A-T
-- Provides unique value
-- Has human oversight and editing
-- Contains original insights
+### 可接受的 AI 内容
+- 展现出真实的 E-E-A-T
+- 提供独特价值
+- 有人工审核与编辑把关
+- 包含原创见解
 
-### Low-Quality AI Content Markers
-- Generic phrasing, lack of specificity
-- No original insight
-- Repetitive structure across pages
-- No author attribution
-- Factual inaccuracies
+### 低质量 AI 内容的标志
+- 措辞泛泛、缺乏具体细节
+- 没有原创见解
+- 多个页面之间结构高度重复
+- 无作者署名
+- 存在事实性错误
 
-> **Helpful Content System (March 2024):** The Helpful Content System was merged into Google's core ranking algorithm during the March 2024 core update. It no longer operates as a standalone classifier. Helpfulness signals are now weighted within every core update. The same principles apply (people-first content, demonstrating E-E-A-T, satisfying user intent), but enforcement is continuous rather than through separate HCU updates.
+> **Helpful Content System（2024 年 3 月）：** Helpful Content System 已在
+> 2024 年 3 月的核心算法更新中并入 Google 核心排名算法，不再作为独立分类器
+> 运行。"有用性"信号如今在每次核心更新中都会被纳入权重考量。核心原则不变
+> （内容以人为本、体现 E-E-A-T、满足用户意图），但落地方式从独立的 HCU 更新
+> 变成了持续性的评估机制。
 
-## AI Citation Readiness (GEO signals)
+## AI 引用就绪度（GEO 信号）
 
-Optimize for AI search engines (ChatGPT, Perplexity, Google AI Overviews):
+面向 AI 搜索引擎（ChatGPT、Perplexity、Google AI Overviews）进行优化：
 
-- Clear, quotable statements with statistics/facts
-- Structured data (especially for data points)
-- Strong heading hierarchy (H1->H2->H3 flow)
-- Answer-first formatting for key questions
-- Tables and lists for comparative data
-- Clear attribution and source citations
+- 提供清晰、可直接引用的陈述句，配以统计数据/事实
+- 结构化数据（尤其是数据类信息）
+- 清晰的标题层级（H1->H2->H3 递进关系）
+- 关键问题采用"先给答案"的表达方式
+- 用表格和列表呈现对比类数据
+- 明确的出处标注与引用来源
 
-### AI Search Visibility & GEO (2025-2026)
+### AI 搜索可见性与 GEO（2025-2026）
 
-**Google AI Mode** is Google's conversational AI search surface — powered by **Gemini 3.5 Flash** since I/O 2026 (May 2026) and now past **1 billion monthly users** globally. Unlike AI Overviews (which appear above organic results), AI Mode is a fully conversational experience with **zero organic blue links**, making AI citation the only visibility mechanism. It is a *distinct citation engine* from AI Overviews — the two share only ~14% of cited URLs — so optimize for both surfaces, not one (see the `seo-geo` skill).
+**Google AI Mode** 是 Google 的对话式 AI 搜索界面——自 2026 年 5 月 I/O 大会起
+由 **Gemini 3.5 Flash** 提供支持，目前全球月活用户已突破 **10 亿**。与出现在
+自然搜索结果上方的 AI Overviews 不同，AI Mode 是一个完全对话式的体验，
+**没有任何自然搜索蓝色链接**，这意味着被 AI 引用是唯一的可见性获取渠道。它是
+一套与 AI Overviews *截然不同的独立引用引擎*——二者被引用的 URL 重合度仅约
+14%——因此需要同时针对这两个界面做优化，而不是只顾一头（详见 `seo-geo` 技能）。
 
-**Key optimization strategies for AI citation:**
-- **Structured answers:** Clear question-answer formats, definition patterns, and step-by-step instructions that AI systems can extract and cite
-- **First-party data:** Original research, statistics, case studies, and unique datasets are highly cited by AI systems
-- **Schema markup:** Article, FAQPage (Google retired FAQ *rich results* in May 2026, but the markup still aids AI parsing/entity resolution) or QAPage for genuine user Q&A, and structured content schemas help AI systems parse and attribute content
-- **Topical authority:** AI systems preferentially cite sources that demonstrate deep expertise. Build content clusters, not isolated pages
-- **Entity clarity:** Ensure brand, authors, and key concepts are clearly defined with structured data (Organization, Person schema)
-- **Multi-platform tracking:** Monitor visibility across Google AI Overviews, AI Mode, ChatGPT, Perplexity, and Bing Copilot, not just traditional rankings. Treat AI citation as a standalone KPI alongside organic rankings and traffic.
+**AI 引用优化的关键策略：**
+- **结构化答案：** 清晰的问答式结构、定义式表达、分步说明，便于 AI 系统提取和引用
+- **第一方数据：** 原创研究、统计数据、案例研究和独家数据集，极易被 AI 系统引用
+- **结构化数据标记（Schema markup）：** Article、FAQPage（Google 已于 2026 年
+  5 月下线 FAQ *富媒体结果*展示，但该标记仍有助于 AI 解析与实体识别）或用于
+  真实用户问答的 QAPage，以及结构化内容 schema，都有助于 AI 系统解析和归因内容
+- **话题权威性：** AI 系统更倾向于引用能体现深度专业积累的信息源。应构建内容
+  集群（content cluster），而非孤立单篇页面
+- **实体清晰度：** 通过结构化数据（Organization、Person schema）确保品牌、
+  作者及关键概念都有清晰定义
+- **多平台追踪：** 不要只盯着传统排名，还要监控在 Google AI Overviews、AI Mode、
+  ChatGPT、Perplexity、Bing Copilot 上的可见性表现。将 AI 引用视为与自然排名
+  和流量并列的独立 KPI
 
-**Generative Engine Optimization (GEO):**
-Per Google's AI optimization guide, "AEO" and "GEO" are rebranded labels for SEO — AI Overviews and AI Mode are grounded in the same ranking and quality systems as classic Search. The optimization signals that matter (quotability, attribution, heading hierarchy, freshness) are SEO fundamentals applied to AI-search surfaces, not a separate discipline. Cross-reference the `seo-geo` skill for detailed workflows; both surfaces share the primary-source synthesis in `skills/seo-geo/references/google-ai-optimization-guide.md`.
+**生成式引擎优化（Generative Engine Optimization，GEO）：**
+根据 Google 的 AI 优化指南，"AEO"和"GEO"其实是 SEO 的改名说法——AI Overviews
+和 AI Mode 依托的排名与质量体系，与经典搜索完全一致。真正重要的优化信号
+（可引用性、出处标注、标题层级、内容新鲜度）都是 SEO 的基本功在 AI 搜索界面上
+的延伸应用，而不是另一套独立的学科。完整工作流请交叉参考 `seo-geo` 技能；两个
+界面共用同一份一手资料综述：`skills/seo-geo/references/google-ai-optimization-guide.md`。
 
-## Content Freshness
+## 内容新鲜度
 
-- Publication date visible
-- Last updated date if content has been revised
-- Flag content older than 12 months without update for fast-changing topics
+- 发布日期清晰可见
+- 若内容有修订，展示最后更新日期
+- 对时效性较强的话题，标记超过 12 个月未更新的内容
 
-## Output
+## 输出
 
-### Content Quality Score: XX/100
+### 内容质量得分：XX/100
 
-### E-E-A-T Breakdown
-| Factor | Score | Key Signals |
+### E-E-A-T 明细
+| 维度 | 得分 | 关键信号 |
 |--------|-------|-------------|
-| Experience | XX/25 | ... |
-| Expertise | XX/25 | ... |
-| Authoritativeness | XX/25 | ... |
-| Trustworthiness | XX/25 | ... |
+| Experience（经验） | XX/25 | ... |
+| Expertise（专业性） | XX/25 | ... |
+| Authoritativeness（权威性） | XX/25 | ... |
+| Trustworthiness（可信度） | XX/25 | ... |
 
-### AI Citation Readiness: XX/100
+### AI 引用就绪度：XX/100
 
-### Issues Found
-### Recommendations
+### 发现的问题
+### 优化建议
 
-## DataForSEO Integration (Optional)
+## DataForSEO 集成（可选）
 
-If DataForSEO MCP tools are available, use `kw_data_google_ads_search_volume` for real keyword volume data, `dataforseo_labs_bulk_keyword_difficulty` for difficulty scores, `dataforseo_labs_search_intent` for intent classification, and `content_analysis_summary` for content quality analysis.
+如果 DataForSEO MCP 工具可用，使用 `kw_data_google_ads_search_volume` 获取真实
+关键词搜索量数据，使用 `dataforseo_labs_bulk_keyword_difficulty` 获取难度评分，
+使用 `dataforseo_labs_search_intent` 获取搜索意图分类，使用
+`content_analysis_summary` 进行内容质量分析。
 
-## Error Handling
+## 错误处理
 
-| Scenario | Action |
+| 场景 | 处理方式 |
 |----------|--------|
-| URL unreachable (DNS failure, connection refused) | Report the error clearly. Do not guess page content. Suggest the user verify the URL and try again. |
-| Content behind paywall (402/403, login wall) | Report that the content is not publicly accessible. Analyze only the visible portion (meta tags, headers) and note the limitation. |
-| Thin content (fewer than 100 words retrievable) | Report the findings as-is rather than guessing. Flag the page as potentially JavaScript-rendered or gated, and suggest the user provide the full text directly. |
+| URL 无法访问（DNS 失败、连接被拒绝） | 清晰地报告错误，不要臆测页面内容。建议用户核实 URL 后重试。 |
+| 内容位于付费墙之后（402/403、登录墙） | 报告该内容无法公开访问。仅分析可见部分（meta 标签、响应头），并说明这一限制。 |
+| 内容单薄（可获取的正文不足 100 词） | 如实报告获取到的结果，不做臆测。标记该页面可能是 JavaScript 渲染或存在访问限制，并建议用户直接提供完整文本。 |
 
-## FLOW Framework Integration
+## FLOW 框架集成
 
-For prompt-guided content optimization, use `/seo flow optimize <url>` and `/seo flow win <url>` — FLOW's optimize and win prompts provide structured E-E-A-T improvement and BOFU conversion workflows.
+若需要以提示词方式引导内容优化，可使用 `/seo flow optimize <url>` 和
+`/seo flow win <url>` —— FLOW 的 optimize 与 win 提示词分别提供结构化的
+E-E-A-T 提升方案与 BOFU（漏斗底层）转化优化流程。

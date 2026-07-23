@@ -1,9 +1,9 @@
 ---
 name: seo-sitemap
 description: >
-  Analyze existing XML sitemaps or generate new ones with industry templates.
-  Validates format, URLs, and structure. Use when user says "sitemap",
-  "generate sitemap", "sitemap issues", or "XML sitemap".
+  分析既有 XML 站点地图或使用行业模板生成新的站点地图，校验格式、URL
+  与结构。当用户说"站点地图"、"生成 sitemap"、"sitemap 问题" 或
+  "sitemap", "generate sitemap", "sitemap issues", "XML sitemap" 时使用本技能。
 user-invocable: true
 argument-hint: "[url or generate]"
 license: MIT
@@ -13,66 +13,66 @@ metadata:
   category: seo
 ---
 
-# Sitemap Analysis & Generation
+# 站点地图分析与生成
 
-## Mode 1: Analyze Existing Sitemap
+## 模式 1：分析既有 Sitemap
 
-### Validation Checks
-- Valid XML format
-- URL count <50,000 per file (protocol limit)
-- All URLs return HTTP 200
-- `<lastmod>` dates are accurate (not all identical)
-- No deprecated tags: `<priority>` and `<changefreq>` are ignored by Google
-- Sitemap referenced in robots.txt
-- Compare crawled pages vs sitemap; flag missing pages
+### 校验项
+- XML 格式是否有效
+- 单文件 URL 数量 <50,000（协议限制）
+- 所有 URL 是否返回 HTTP 200
+- `<lastmod>` 日期是否准确（不是全部相同）
+- 不存在已废弃标签：`<priority>` 和 `<changefreq>` 已被 Google 忽略
+- Sitemap 是否在 robots.txt 中注册
+- 对比已抓取页面与 sitemap，标记缺失的页面
 
-### Quality Signals
-- Sitemap index file if >50k URLs
-- Split by content type (pages, posts, images, videos)
-- No non-canonical URLs in sitemap
-- No noindexed URLs in sitemap
-- No redirected URLs in sitemap
-- HTTPS URLs only (no HTTP)
+### 质量信号
+- 若 URL 超过 5 万，应使用 sitemap 索引文件
+- 按内容类型拆分（页面、文章、图片、视频）
+- sitemap 中不应包含非规范（non-canonical）URL
+- sitemap 中不应包含已设为 noindex 的 URL
+- sitemap 中不应包含被重定向的 URL
+- 仅使用 HTTPS URL（不使用 HTTP）
 
-### Common Issues
-| Issue | Severity | Fix |
+### 常见问题
+| 问题 | 严重程度 | 修复方式 |
 |-------|----------|-----|
-| >50k URLs in single file | Critical | Split with sitemap index |
-| Non-200 URLs | High | Remove or fix broken URLs |
-| Noindexed URLs included | High | Remove from sitemap |
-| Redirected URLs included | Medium | Update to final URLs |
-| All identical lastmod | Low | Use actual modification dates |
-| Priority/changefreq used | Info | Can remove (ignored by Google) |
+| 单文件超过 5 万个 URL | 严重 | 使用 sitemap 索引拆分 |
+| 非 200 状态的 URL | 高 | 移除或修复失效 URL |
+| 包含 noindex 的 URL | 高 | 从 sitemap 中移除 |
+| 包含被重定向的 URL | 中 | 更新为最终跳转后的 URL |
+| lastmod 全部相同 | 低 | 使用真实的修改日期 |
+| 使用了 priority/changefreq | 提示 | 可以移除（Google 已忽略这两个标签） |
 
-## Mode 2: Generate New Sitemap
+## 模式 2：生成新 Sitemap
 
-### Process
-1. Ask for business type (or auto-detect from existing site)
-2. Load industry template from `../seo-plan/assets/` directory
-3. Interactive structure planning with user
-4. Apply quality gates:
-   - ⚠️ WARNING at 30+ location pages (require 60%+ unique content)
-   - 🛑 HARD STOP at 50+ location pages (require justification)
-5. Generate valid XML output
-6. Split at 50k URLs with sitemap index
-7. Generate STRUCTURE.md documentation
+### 流程
+1. 询问业务类型（或从现有站点自动识别）
+2. 从 `../seo-plan/assets/` 目录加载行业模板
+3. 与用户交互式规划结构
+4. 应用质量门槛：
+   - ⚠️ 警告：地区页面达到 30+ 个（需 60%+ 独有内容）
+   - 🛑 硬性停止：地区页面达到 50+ 个（需提供正当理由）
+5. 生成有效的 XML 输出
+6. 超过 5 万 URL 时使用 sitemap 索引拆分
+7. 生成 STRUCTURE.md 文档
 
-### Safe Programmatic Pages (OK at scale)
-✅ Integration pages (with real setup docs)
-✅ Template/tool pages (with downloadable content)
-✅ Glossary pages (200+ word definitions)
-✅ Product pages (unique specs, reviews)
-✅ User profile pages (user-generated content)
+### 可以安全批量生产的程序化页面
+✅ 集成页面（配有真实的接入文档）
+✅ 模板/工具页面（配有可下载内容）
+✅ 词汇表页面（200 字以上的定义）
+✅ 产品页面（独有的规格、评价）
+✅ 用户主页（用户生成内容）
 
-### Penalty Risk (avoid at scale)
-❌ Location pages with only city name swapped
-❌ "Best [tool] for [industry]" without industry-specific value
-❌ "[Competitor] alternative" without real comparison data
-❌ AI-generated pages without human review and unique value
+### 存在处罚风险（不应批量生产）
+❌ 仅替换城市名的地区页面
+❌ 缺乏行业针对性价值的"[行业]最佳[工具]"页面
+❌ 没有真实对比数据的"[竞品]替代方案"页面
+❌ 缺乏人工审核和独特价值的 AI 生成页面
 
-## Sitemap Format
+## Sitemap 格式
 
-### Standard Sitemap
+### 标准 Sitemap
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -83,7 +83,7 @@ metadata:
 </urlset>
 ```
 
-### Sitemap Index (for >50k URLs)
+### Sitemap 索引（适用于超过 5 万个 URL 的情况）
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -98,21 +98,21 @@ metadata:
 </sitemapindex>
 ```
 
-## Error Handling
+## 错误处理
 
-- **URL unreachable**: Report the HTTP status code and suggest checking if the site is live
-- **No sitemap found**: Check common locations (/sitemap.xml, /sitemap_index.xml, robots.txt reference) before reporting "not found"
-- **Invalid XML format**: Report specific parsing errors with line numbers
-- **Rate limiting detected**: Back off and report partial results with a note about retry timing
+- **URL 无法访问**：报告 HTTP 状态码，建议检查站点是否正常运行
+- **未找到 sitemap**：在报告"未找到"之前，先检查常见位置（/sitemap.xml、/sitemap_index.xml、robots.txt 中的引用）
+- **XML 格式无效**：报告具体的解析错误及行号
+- **检测到限流**：降速重试并报告部分结果，附注重试时机建议
 
-## Output
+## 输出
 
-### For Analysis
-- `VALIDATION-REPORT.md`: analysis results
-- Issues list with severity
-- Recommendations
+### 分析模式
+- `VALIDATION-REPORT.md`：分析结果
+- 带严重程度标注的问题清单
+- 优化建议
 
-### For Generation
-- `sitemap.xml` (or split files with index)
-- `STRUCTURE.md`: site architecture documentation
-- URL count and organization summary
+### 生成模式
+- `sitemap.xml`（或带索引的拆分文件）
+- `STRUCTURE.md`：站点架构文档
+- URL 数量与组织结构摘要

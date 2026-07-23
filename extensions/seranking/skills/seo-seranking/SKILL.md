@@ -1,6 +1,6 @@
 ---
 name: seo-seranking
-description: SE Ranking AI visibility analyst (extension). Tracks AI Share-of-Voice across ChatGPT, Gemini, Perplexity, AI Overviews, and AI Mode in a single query. Highest-impact new extension per the v2 gap analysis — no other vendor covers all 5 AI platforms in one API.
+description: SE Ranking AI 可见度分析师（扩展）。一次查询即可追踪品牌在 ChatGPT、Gemini、Perplexity、AI Overviews 和 AI Mode 中的 AI Share-of-Voice（AI 声量占比）。根据 v2 差距分析，这是影响力最高的新扩展——没有其他供应商能在单一 API 中覆盖全部 5 个 AI 平台。SE Ranking AI visibility, Share-of-Voice, ChatGPT, Gemini, Perplexity, AI Overviews, AI Mode.
 metadata:
   version: "2.2.0"
 compatibility: "Requires an SE Ranking API key (set SERANKING_API_KEY by running extensions/seranking/install.sh)."
@@ -8,44 +8,43 @@ compatibility: "Requires an SE Ranking API key (set SERANKING_API_KEY by running
 
 # seo-seranking
 
-Live AI visibility tracking via the SE Ranking REST API.
+通过 SE Ranking REST API 进行实时 AI 可见度追踪。
 
-## Prerequisites
+## 前置条件
 
-- Run `extensions/seranking/install.sh` (or `install.ps1`).
-- An SE Ranking API key (https://seranking.com/api).
-- Before any call, verify `SERANKING_API_KEY` is present in `~/.claude/settings.json` under `env.`. If absent, tell the user to run the installer.
+- 运行 `extensions/seranking/install.sh`（或 `install.ps1`）。
+- 需要一个 SE Ranking API key（https://seranking.com/api）。
+- 在发起任何调用之前，先确认 `~/.claude/settings.json` 的 `env.` 下存在 `SERANKING_API_KEY`。若不存在，请告知用户运行安装脚本。
 
-## Routing
+## 路由
 
-| Command | Purpose |
+| 命令 | 用途 |
 |---|---|
-| `/seo seranking ai-visibility <brand>` | Share-of-voice for `brand` across ChatGPT, Gemini, Perplexity, AI Overviews, AI Mode |
-| `/seo seranking serp <keyword>` | Top 100 organic positions + SERP features |
-| `/seo seranking backlinks <url>` | Backlink profile (alternative free-tier to Ahrefs / DataForSEO) |
-| `/seo seranking competitors <url>` | Top 10 organic competitors and shared-keyword gaps |
+| `/seo seranking ai-visibility <brand>` | `brand` 在 ChatGPT、Gemini、Perplexity、AI Overviews、AI Mode 中的声量占比（share-of-voice） |
+| `/seo seranking serp <keyword>` | 自然排名前 100 位 + SERP 特征 |
+| `/seo seranking backlinks <url>` | 外链画像（Ahrefs / DataForSEO 的免费层替代方案） |
+| `/seo seranking competitors <url>` | 前 10 名自然排名竞争对手及共享关键词差距 |
 
-## AI Share-of-Voice scoring
+## AI Share-of-Voice 评分
 
-SE Ranking samples each AI platform's responses for brand mentions
-across a configurable prompt set. The scorer is the same logic used
-by Profound / Peec AI but bundled into one MCP/API. Output fields:
+SE Ranking 会在一组可配置的提示词（prompt）集合上，对每个 AI 平台的
+回答进行品牌提及采样。其打分逻辑与 Profound / Peec AI 相同，只是
+整合进了一个 MCP/API。输出字段：
 
-- `chatgpt_sov`: % of sampled prompts where the brand appears in the response.
-- `gemini_sov`: same, against Google Gemini.
-- `perplexity_sov`: same, against Perplexity.
-- `ai_overviews_sov`: brand citation rate inside Google AI Overviews.
-- `ai_mode_sov`: brand citation rate inside Google AI Mode (US English first).
+- `chatgpt_sov`：品牌出现在采样提示词回答中的百分比。
+- `gemini_sov`：针对 Google Gemini 的同类指标。
+- `perplexity_sov`：针对 Perplexity 的同类指标。
+- `ai_overviews_sov`：品牌在 Google AI Overviews 中的引用率。
+- `ai_mode_sov`：品牌在 Google AI Mode 中的引用率（优先支持美式英语）。
 
-Report each as a percentage with a confidence note based on sample size.
+每项都应以百分比形式呈现，并根据样本量给出置信度说明。
 
-## Cost guardrails
+## 成本护栏
 
-SE Ranking API uses unit accounting. Single AI visibility query is
-~5 units (1 per platform). Use `scripts/dataforseo_costs.py` to log
-spend across vendors.
+SE Ranking API 采用单位计费。单次 AI 可见度查询约消耗 5 个单位
+（每个平台 1 个）。使用 `scripts/dataforseo_costs.py` 记录各供应商的花费。
 
-## Cross-skill delegation
+## 跨技能委派
 
-- For traditional backlinks + content audit, fall back to `seo-backlinks` / `seo-content`.
-- For platform-specific deep-dives (ChatGPT only, Perplexity only), prefer the dedicated `seo-geo` skill which has Brand Mention Correlation guidance.
+- 需要传统外链分析 + 内容审计时，回退到 `seo-backlinks` / `seo-content`。
+- 需要针对单一平台的深入分析（仅 ChatGPT、仅 Perplexity）时，优先使用专门的 `seo-geo` 技能，它提供品牌提及相关性（Brand Mention Correlation）指导。

@@ -1,10 +1,11 @@
 ---
 name: seo-technical
 description: >
-  Technical SEO audit across 9 categories: crawlability, indexability, security,
-  URL structure, mobile, Core Web Vitals, structured data, JavaScript rendering,
-  and IndexNow protocol. Use when user says "technical SEO", "crawl issues",
-  "robots.txt", "Core Web Vitals", "site speed", or "security headers".
+  技术 SEO（Technical SEO）审计，覆盖 9 大类别：可爬取性（crawlability）、可索引性
+  （indexability）、安全性、URL 结构、移动端适配、Core Web Vitals、结构化数据、
+  JavaScript 渲染以及 IndexNow 协议。当用户说"技术 SEO"、"technical SEO"、
+  "爬取问题"、"crawl issues"、"robots.txt"、"Core Web Vitals"、"网站速度"、
+  "site speed"、或"安全响应头"、"security headers" 时使用本技能。
 user-invocable: true
 argument-hint: "[url]"
 license: MIT
@@ -14,40 +15,43 @@ metadata:
   category: seo
 ---
 
-# Technical SEO Audit
+# 技术 SEO 审计
 
-## Categories
+## 类别
 
-### 1. Crawlability
-- robots.txt: exists, valid, not blocking important resources
-- XML sitemap: exists, referenced in robots.txt, valid format
-- Noindex tags: intentional vs accidental
-- Crawl depth: important pages within 3 clicks of homepage
-- JavaScript rendering: check if critical content requires JS execution
-- Crawl budget: for large sites (>10k pages), efficiency matters
+### 1. 可爬取性（Crawlability）
+- robots.txt：是否存在、格式是否有效、是否误封了重要资源
+- XML 站点地图（sitemap）：是否存在、是否在 robots.txt 中被引用、格式是否有效
+- Noindex 标签：判断是有意为之还是误配置
+- 爬取深度：重要页面距首页应在 3 次点击以内
+- JavaScript 渲染：检查关键内容是否依赖 JS 执行才能呈现
+- 爬取预算（crawl budget）：对于大型站点（页面数超过 1 万）尤其需要关注抓取效率
 
-#### AI Crawler Management
+#### AI 爬虫管理
 
-As of 2025-2026, AI companies actively crawl the web to train models and power AI search. Managing these crawlers via robots.txt is a critical technical SEO consideration.
+截至 2025-2026 年，AI 公司正在积极抓取网络内容用于模型训练和 AI 搜索。通过
+robots.txt 管理这些爬虫，是当前技术 SEO 中的一项关键考量。
 
-**Known AI crawlers:**
+**已知的 AI 爬虫：**
 
-| Crawler | Company | robots.txt token | Purpose |
+| 爬虫 | 公司 | robots.txt 标识 | 用途 |
 |---------|---------|-----------------|---------|
-| GPTBot | OpenAI | `GPTBot` | Model training |
-| ChatGPT-User | OpenAI | `ChatGPT-User` | Real-time browsing |
-| ClaudeBot | Anthropic | `ClaudeBot` | Model training |
-| PerplexityBot | Perplexity | `PerplexityBot` | Search index + training |
-| Bytespider | ByteDance | `Bytespider` | Model training |
-| Google-Extended | Google | `Google-Extended` | Gemini training (NOT search) |
-| CCBot | Common Crawl | `CCBot` | Open dataset |
+| GPTBot | OpenAI | `GPTBot` | 模型训练 |
+| ChatGPT-User | OpenAI | `ChatGPT-User` | 实时浏览 |
+| ClaudeBot | Anthropic | `ClaudeBot` | 模型训练 |
+| PerplexityBot | Perplexity | `PerplexityBot` | 搜索索引 + 训练 |
+| Bytespider | 字节跳动（ByteDance） | `Bytespider` | 模型训练 |
+| Google-Extended | Google | `Google-Extended` | Gemini 训练（不用于搜索） |
+| CCBot | Common Crawl | `CCBot` | 开放数据集 |
 
-**Key distinctions:**
-- Blocking `Google-Extended` prevents Gemini training use but does NOT affect Google Search indexing or AI Overviews (those use `Googlebot`)
-- Blocking `GPTBot` prevents OpenAI training but does NOT prevent ChatGPT from citing your content via browsing (`ChatGPT-User`)
-- ~3-5% of websites now use AI-specific robots.txt rules
+**关键区别：**
+- 屏蔽 `Google-Extended` 只会阻止其用于 Gemini 训练，并不影响 Google 搜索索引或
+  AI Overviews（这两者走的是 `Googlebot`）
+- 屏蔽 `GPTBot` 只会阻止 OpenAI 训练用途，并不会阻止 ChatGPT 通过浏览方式
+  （`ChatGPT-User`）引用你的内容
+- 目前约 3%-5% 的网站已设置了针对 AI 的专项 robots.txt 规则
 
-**Example, selective AI crawler blocking:**
+**示例：有选择地屏蔽 AI 爬虫**
 ```
 # Allow search indexing, block AI training crawlers
 User-agent: GPTBot
@@ -64,139 +68,158 @@ User-agent: *
 Allow: /
 ```
 
-**Recommendation:** Consider your AI visibility strategy before blocking. Being cited by AI systems drives brand awareness and referral traffic. Cross-reference the `seo-geo` skill for full AI visibility optimization.
+**建议：** 在屏蔽之前先想清楚自己的 AI 可见性策略。被 AI 系统引用有助于提升品牌
+认知度和引荐流量。完整的 AI 可见性优化请交叉参考 `seo-geo` 技能。
 
-### 2. Indexability
-- Canonical tags: self-referencing, no conflicts with noindex
-- Duplicate content: near-duplicates, parameter URLs, www vs non-www
-- Thin content: pages below minimum word counts per type
-- Pagination: rel=next/prev or load-more pattern
-- Hreflang: correct for multi-language/multi-region sites
-- Index bloat: unnecessary pages consuming crawl budget
+### 2. 可索引性（Indexability）
+- Canonical 标签：是否自我引用、是否与 noindex 冲突
+- 重复内容：近似重复页面、带参数的 URL、www 与非 www 版本
+- 内容单薄（thin content）：低于对应页面类型最低字数要求的页面
+- 分页：rel=next/prev 或加载更多（load-more）模式
+- Hreflang：多语言/多地区站点是否正确配置
+- 索引膨胀（index bloat）：占用爬取预算的无价值页面
 
-### 3. Security
-- HTTPS: enforced, valid SSL certificate, no mixed content
-- Security headers:
-  - Content-Security-Policy (CSP)
-  - Strict-Transport-Security (HSTS)
+### 3. 安全性
+- HTTPS：是否强制启用、SSL 证书是否有效、是否存在混合内容（mixed content）
+- 安全响应头：
+  - Content-Security-Policy（CSP）
+  - Strict-Transport-Security（HSTS）
   - X-Frame-Options
   - X-Content-Type-Options
   - Referrer-Policy
-- HSTS preload: check preload list inclusion for high-security sites
+- HSTS 预加载：对安全性要求高的站点，检查是否已加入 preload 名单
 
-### 4. URL Structure
-- Clean URLs: descriptive, hyphenated, no query parameters for content
-- Hierarchy: logical folder structure reflecting site architecture
-- Redirects: no chains (max 1 hop), 301 for permanent moves
-- URL length: flag >100 characters
-- Trailing slashes: consistent usage
+### 4. URL 结构
+- URL 干净整洁：具描述性、使用连字符、内容页不带查询参数
+- 层级结构：文件夹结构合理反映网站架构
+- 重定向：不存在跳转链（最多 1 跳），永久迁移使用 301
+- URL 长度：超过 100 个字符需标记
+- 结尾斜杠：使用方式保持一致
 
-### 5. Mobile Optimization
-- Responsive design: viewport meta tag, responsive CSS
-- Touch targets: minimum 48x48px with 8px spacing
-- Font size: minimum 16px base
-- No horizontal scroll
-- Mobile-first indexing: Google indexes mobile version. **Mobile-first indexing is 100% complete as of July 5, 2024.** Google now crawls and indexes ALL websites exclusively with the mobile Googlebot user-agent.
+### 5. 移动端优化
+- 响应式设计：viewport meta 标签、响应式 CSS
+- 触控目标：最小 48x48px，间距 8px
+- 字号：基础字号最小 16px
+- 无水平滚动
+- 移动优先索引（Mobile-first indexing）：Google 索引移动版页面。**截至 2024 年
+  7 月 5 日，移动优先索引已 100% 完成。** Google 现已对所有网站统一使用移动版
+  Googlebot 抓取和索引。
 
 ### 6. Core Web Vitals
-- **LCP** (Largest Contentful Paint): target <2.5s
-- **INP** (Interaction to Next Paint): target <200ms
-  - INP replaced FID on March 12, 2024. FID was fully removed from all Chrome tools (CrUX API, PageSpeed Insights, Lighthouse) on September 9, 2024. Do NOT reference FID anywhere.
-- **CLS** (Cumulative Layout Shift): target <0.1
-- Evaluation uses 75th percentile of real user data
-- Use PageSpeed Insights API or CrUX data if MCP available
+- **LCP**（Largest Contentful Paint，最大内容绘制）：目标 <2.5s
+- **INP**（Interaction to Next Paint，交互到下一次绘制）：目标 <200ms
+  - INP 已于 2024 年 3 月 12 日取代 FID，FID 已于 2024 年 9 月 9 日从所有 Chrome
+    工具（CrUX API、PageSpeed Insights、Lighthouse）中彻底移除。不应在任何地方
+    再提及 FID。
+- **CLS**（Cumulative Layout Shift，累积布局偏移）：目标 <0.1
+- 评估采用真实用户数据的第 75 百分位
+- 若有 MCP 可用，优先使用 PageSpeed Insights API 或 CrUX 数据
 
-### 7. Structured Data
-- Detection: JSON-LD (preferred), Microdata, RDFa
-- Validation against Google's supported types
-- See seo-schema skill for full analysis
+### 7. 结构化数据
+- 检测：JSON-LD（首选）、Microdata、RDFa
+- 对照 Google 支持的类型进行校验
+- 完整分析参见 seo-schema 技能
 
-### 8. JavaScript Rendering
-- Check if content visible in initial HTML vs requires JS
-- Identify client-side rendered (CSR) vs server-side rendered (SSR)
-- Flag SPA frameworks (React, Vue, Angular) that may cause indexing issues
-- Verify dynamic rendering setup if applicable
+### 8. JavaScript 渲染
+- 检查内容是出现在初始 HTML 中，还是需要依赖 JS
+- 区分客户端渲染（CSR）与服务端渲染（SSR）
+- 标记可能导致索引问题的 SPA 框架（React、Vue、Angular）
+- 如适用，核实动态渲染（dynamic rendering）配置
 
-#### JavaScript SEO: Canonical & Indexing Guidance (December 2025)
+#### JavaScript SEO：Canonical 与索引指引（2025 年 12 月）
 
-Google updated its JavaScript SEO documentation in December 2025 with critical clarifications:
+Google 于 2025 年 12 月更新了 JavaScript SEO 文档，带来几项关键澄清：
 
-1. **Canonical conflicts:** If a canonical tag in raw HTML differs from one injected by JavaScript, Google may use EITHER one. Ensure canonical tags are identical between server-rendered HTML and JS-rendered output.
-2. **noindex with JavaScript:** If raw HTML contains `<meta name="robots" content="noindex">` but JavaScript removes it, Google MAY still honor the noindex from raw HTML. Serve correct robots directives in the initial HTML response.
-3. **Non-200 status codes:** Google does NOT render JavaScript on pages returning non-200 HTTP status codes. Any content or meta tags injected via JS on error pages will be invisible to Googlebot.
-4. **Structured data in JavaScript:** Product, Article, and other structured data injected via JS may face delayed processing. For time-sensitive structured data (especially e-commerce Product markup), include it in the initial server-rendered HTML.
+1. **Canonical 冲突：** 若原始 HTML 中的 canonical 标签与 JavaScript 注入的不同，
+   Google 可能采用其中任意一个。应确保服务端渲染 HTML 与 JS 渲染输出中的
+   canonical 标签保持一致。
+2. **JavaScript 处理的 noindex：** 若原始 HTML 中含有
+   `<meta name="robots" content="noindex">`，但 JavaScript 将其移除，Google
+   仍可能沿用原始 HTML 中的 noindex 指令。应在初始 HTML 响应中就提供正确的
+   robots 指令。
+3. **非 200 状态码：** Google 不会对返回非 200 HTTP 状态码的页面执行 JavaScript
+   渲染。错误页面上通过 JS 注入的任何内容或 meta 标签，Googlebot 都无法看到。
+4. **JavaScript 中的结构化数据：** 通过 JS 注入的 Product、Article 等结构化数据
+   可能面临处理延迟。对于时效性较强的结构化数据（尤其是电商 Product 标记），
+   应将其包含在初始服务端渲染 HTML 中。
 
-**Best practice:** Serve critical SEO elements (canonical, meta robots, structured data, title, meta description) in the initial server-rendered HTML rather than relying on JavaScript injection.
+**最佳实践：** 将关键 SEO 元素（canonical、meta robots、结构化数据、title、
+meta description）放在初始服务端渲染 HTML 中，而不是依赖 JavaScript 注入。
 
-### 9. IndexNow Protocol
-- Check if site supports IndexNow for Bing, Yandex, Naver
-- Supported by search engines other than Google
-- Recommend implementation for faster indexing on non-Google engines
+### 9. IndexNow 协议
+- 检查站点是否支持 IndexNow，服务于 Bing、Yandex、Naver
+- 该协议由 Google 以外的搜索引擎支持
+- 建议实施该协议，加快非 Google 搜索引擎的收录速度
 
-## Agent-Friendly Pages (forward-looking)
+## Agent 友好型页面（前瞻性考量）
 
-AI agents (not just AI summarizers) increasingly read sites through three
-channels: vision models on screenshots, raw HTML/DOM, and the **accessibility
-tree** (the cleanest signal). Audit criteria — semantic HTML (real `<button>`
-and `<a>`, not `<div onclick>`), label associations, interactive target sizing,
-layout stability across templates, `cursor: pointer` correctness — live in
-`references/agent-friendly-pages.md`.
+AI agent（不仅是 AI 摘要工具）越来越多地通过三种渠道读取网站：基于截图的视觉
+模型、原始 HTML/DOM，以及**无障碍树（accessibility tree）**（信号最干净的一种）。
+审计标准——语义化 HTML（真正的 `<button>` 和 `<a>`，而非 `<div onclick>`）、
+标签关联、交互目标尺寸、跨模板的布局稳定性、`cursor: pointer` 的正确使用——
+详见 `references/agent-friendly-pages.md`。
 
-### Audit command
+### 审计命令
 
 ```bash
 # Render with Playwright + capture accessibility tree, then score
 python3 scripts/agent_ux_check.py https://example.com --json
 ```
 
-The scanner outputs an Agent-UX score (0-100) plus itemized issues:
-- HTML findings: real buttons / anchors, `<div onclick>` widgets, semantic
-  landmarks, inputs without `<label for>`, inputs without ARIA labels
-- Accessibility tree findings: total nodes, interactive nodes, unnamed
-  interactive elements, `role="generic"` ratio
+该扫描器会输出 Agent-UX 评分（0-100）及逐项问题清单：
+- HTML 层面发现：真实按钮/链接的使用情况、`<div onclick>` 组件、语义化地标、
+  缺少 `<label for>` 的输入框、缺少 ARIA 标签的输入框
+- 无障碍树层面发现：节点总数、可交互节点数、未命名的可交互元素、
+  `role="generic"` 占比
 
-The accessibility-tree snapshot uses Playwright's
-`page.accessibility.snapshot(interesting_only=False)`. To capture the tree
-without scoring, use `python3 scripts/render_page.py <url> --a11y-tree --json`.
+无障碍树快照使用 Playwright 的
+`page.accessibility.snapshot(interesting_only=False)`。若只需获取该树而不
+打分，可使用 `python3 scripts/render_page.py <url> --a11y-tree --json`。
 
-Surface findings as **opportunities**, not failures. The standards (WebMCP,
-agent UX heuristics) are early — don't gate audits on a sub-100 score.
+请将这些发现呈现为**优化机会**，而非硬性失败项。相关标准（WebMCP、agent UX
+启发式规则）尚处于早期阶段——不要因为分数没满 100 就判定审计不通过。
 
-## Output
+## 输出
 
-### Technical Score: XX/100
+### 技术得分：XX/100
 
-### Category Breakdown
-| Category | Status | Score |
+### 分类明细
+| 类别 | 状态 | 得分 |
 |----------|--------|-------|
-| Crawlability | pass/warn/fail | XX/100 |
-| Indexability | pass/warn/fail | XX/100 |
-| Security | pass/warn/fail | XX/100 |
-| URL Structure | pass/warn/fail | XX/100 |
-| Mobile | pass/warn/fail | XX/100 |
+| 可爬取性 | pass/warn/fail | XX/100 |
+| 可索引性 | pass/warn/fail | XX/100 |
+| 安全性 | pass/warn/fail | XX/100 |
+| URL 结构 | pass/warn/fail | XX/100 |
+| 移动端 | pass/warn/fail | XX/100 |
 | Core Web Vitals | pass/warn/fail | XX/100 |
-| Structured Data | pass/warn/fail | XX/100 |
-| JS Rendering | pass/warn/fail | XX/100 |
+| 结构化数据 | pass/warn/fail | XX/100 |
+| JS 渲染 | pass/warn/fail | XX/100 |
 | IndexNow | pass/warn/fail | XX/100 |
 
-### Critical Issues (fix immediately)
-### High Priority (fix within 1 week)
-### Medium Priority (fix within 1 month)
-### Low Priority (backlog)
+### 严重问题（立即修复）
+### 高优先级（1 周内修复）
+### 中优先级（1 个月内修复）
+### 低优先级（列入待办）
 
-## DataForSEO Integration (Optional)
+## DataForSEO 集成（可选）
 
-If DataForSEO MCP tools are available, use `on_page_instant_pages` for real page analysis (status codes, page timing, broken links, on-page checks), `on_page_lighthouse` for Lighthouse audits (performance, accessibility, SEO scores), and `domain_analytics_technologies_domain_technologies` for technology stack detection.
+如果 DataForSEO MCP 工具可用，使用 `on_page_instant_pages` 获取真实页面分析
+数据（状态码、页面耗时、失效链接、页面级检查项），使用 `on_page_lighthouse`
+进行 Lighthouse 审计（性能、无障碍、SEO 得分），使用
+`domain_analytics_technologies_domain_technologies` 检测技术栈。
 
-## Google API Integration (Optional)
+## Google API 集成（可选）
 
-If Google API credentials are configured, use `python3 scripts/pagespeed_check.py <url> --json` for real PSI + CrUX field data (replaces lab-only CWV estimates), `python3 scripts/crux_history.py <url> --json` for 25-week CWV trends, and `python3 scripts/gsc_inspect.py <url> --json` for real indexation status per URL.
+如果已配置 Google API 凭证，使用 `python3 scripts/pagespeed_check.py <url> --json`
+获取真实的 PSI + CrUX 现场数据（替代仅有实验室数据的 CWV 估算值），使用
+`python3 scripts/crux_history.py <url> --json` 获取 25 周的 CWV 趋势，使用
+`python3 scripts/gsc_inspect.py <url> --json` 获取各 URL 的真实收录状态。
 
-## Error Handling
+## 错误处理
 
-| Scenario | Action |
+| 场景 | 处理方式 |
 |----------|--------|
-| URL unreachable | Report connection error with status code. Suggest verifying URL, checking DNS resolution, and confirming the site is publicly accessible. |
-| robots.txt not found | Note that no robots.txt was detected at the root domain. Recommend creating one with appropriate directives. Continue audit on remaining categories. |
-| HTTPS not configured | Flag as a critical issue. Report whether HTTP is served without redirect, mixed content exists, or SSL certificate is missing/expired. |
-| Core Web Vitals data unavailable | Note that CrUX data is not available (common for low-traffic sites). Suggest using Lighthouse lab data as a proxy and recommend increasing traffic before re-testing. |
+| URL 无法访问 | 报告连接错误及状态码。建议核实 URL、检查 DNS 解析，并确认站点可公开访问。 |
+| 未找到 robots.txt | 说明根域名下未检测到 robots.txt，建议创建一个包含合适指令的文件，并继续审计其余类别。 |
+| 未配置 HTTPS | 标记为严重问题。报告是否存在无重定向的 HTTP 访问、混合内容，或 SSL 证书缺失/过期。 |
+| Core Web Vitals 数据不可用 | 说明 CrUX 数据不可用（低流量站点常见情况）。建议以 Lighthouse 实验室数据作为替代参考，并建议流量提升后再重新测试。 |
