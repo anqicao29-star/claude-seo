@@ -23,6 +23,12 @@ if str(UI_DIR) not in sys.path:
 from workbench.config import load_config
 from workbench.errors import ErrorCode, error_payload
 from workbench.runtime import CodexCliRuntime, RuntimeRequest
+from workbench.tasks import (
+    TaskCapacityError,
+    TaskManager,
+    TaskNotCancellableError,
+    TaskNotFoundError,
+)
 
 
 CONFIG = load_config(Path(__file__))
@@ -37,7 +43,9 @@ MAX_SANDBOX = CONFIG.max_sandbox
 MAX_REQUEST_BYTES = CONFIG.max_request_bytes
 MAX_MESSAGE_CHARS = CONFIG.max_message_chars
 RUNTIME = CodexCliRuntime(CODEX_BIN, CODEX_MODEL, PROJECT_DIR)
+TASKS = TaskManager()
 LOCAL_HOST_PATTERN = re.compile(r"\A(?:127\.0\.0\.1|localhost)(?::\d{1,5})?\Z", re.IGNORECASE)
+TASK_CANCEL_PATTERN = re.compile(r"\A/api/tasks/(task_[0-9a-f]{32})/cancel\Z")
 
 CATEGORIES = {
     "编排": ["seo"],
@@ -259,7 +267,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_api_error(403, ErrorCode.HOST_DENIED, "拒绝非本机请求")
             return
         route = self.path.split("?")[0]
-        if route != "/api/chat":
+        cancel_match = TASK_CANCEL_PATTERN.fullmatch(route)
+        if route != "/api/chat" and cancel_match is None:
             self.send_api_error(404, ErrorCode.ROUTE_NOT_FOUND, "未找到接口")
             return
         media_type = self.headers.get("Content-Type", "").partition(";")[0].strip().lower()
@@ -273,7 +282,25 @@ class Handler(SimpleHTTPRequestHandler):
         if not self.has_allowed_origin():
             self.send_api_error(403, ErrorCode.ORIGIN_DENIED, "拒绝跨站请求")
             return
-        self.handle_chat()
+        if cancel_match is not None:
+            self.handle_cancel(cancel_match.group(1))
+        else:
+            self.handle_chat()
+
+    def handle_cancel(self, task_id):
+        try:
+            task = TASKS.cancel(task_id)
+        except TaskNotFoundError:
+            self.send_api_error(404, ErrorCode.TASK_NOT_FOUND, "任务不存在")
+            return
+        except TaskNotCancellableError:
+            self.send_api_error(
+                409,
+                ErrorCode.TASK_NOT_CANCELLABLE,
+                "任务已经结束，无法取消",
+            )
+            return
+        self.send_json(200, {"task": task})
 
     def handle_chat(self):
         try:
@@ -310,11 +337,22 @@ class Handler(SimpleHTTPRequestHandler):
             if not re.fullmatch(r"seo(?:-[a-z0-9-]+)?", skill) or not skill_path.is_file():
                 self.send_api_error(400, ErrorCode.SKILL_NOT_FOUND, "选择的技能不存在")
                 return
+        try:
+            task = TASKS.create()
+        except TaskCapacityError:
+            self.send_api_error(
+                429,
+                ErrorCode.TASK_CAPACITY,
+                "当前任务过多，请稍后重试",
+                retryable=True,
+            )
+            return
 
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
         self.send_header("Cache-Control", "no-cache, no-store")
         self.send_header("X-Accel-Buffering", "no")
+        self.send_header("X-Task-ID", task.task_id)
         self.send_header("Connection", "close")
         self.end_headers()
         self.close_connection = True
@@ -327,6 +365,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.flush()
 
         try:
+            emit({"type": "task", "task_id": task.task_id})
             runtime_session = RUNTIME.start(
                 RuntimeRequest(
                     prompt=build_prompt(message, skill, not thread_id),
@@ -334,6 +373,7 @@ class Handler(SimpleHTTPRequestHandler):
                     sandbox=sandbox,
                 )
             )
+            TASKS.bind_session(task.task_id, runtime_session)
 
             emitted_error = False
             for runtime_event in runtime_session.events():
@@ -343,13 +383,23 @@ class Handler(SimpleHTTPRequestHandler):
                 emit(client_event)
 
             return_code = runtime_session.wait()
-            if return_code != 0 and not emitted_error:
+            if TASKS.is_cancel_requested(task.task_id):
+                TASKS.finish(task.task_id, "cancelled")
+                emit({"type": "cancelled", "task_id": task.task_id})
+            elif return_code != 0 and not emitted_error:
                 detail = runtime_session.stderr_tail()
+                TASKS.finish(task.task_id, "failed")
                 emit({"type": "error", "message": detail or f"Codex 退出，状态码 {return_code}"})
+            elif emitted_error:
+                TASKS.finish(task.task_id, "failed")
+            else:
+                TASKS.finish(task.task_id, "completed")
         except BrokenPipeError:
             if runtime_session:
                 runtime_session.terminate()
+            TASKS.finish(task.task_id, "cancelled")
         except OSError as error:
+            TASKS.finish(task.task_id, "failed")
             try:
                 emit({"type": "error", "message": f"无法启动 Codex：{error}"})
             except BrokenPipeError:

@@ -24,6 +24,7 @@ assert SERVER_SPEC.loader is not None
 SERVER_SPEC.loader.exec_module(server)
 
 from workbench.runtime import RuntimeEvent, RuntimeStatus  # noqa: E402
+from workbench.tasks import TaskManager  # noqa: E402
 
 
 class FakeRuntimeSession:
@@ -46,6 +47,21 @@ class FakeRuntimeSession:
         self.terminated = True
 
 
+class BlockingRuntimeSession(FakeRuntimeSession):
+    def __init__(self):
+        super().__init__(return_code=143)
+        self.released = threading.Event()
+
+    def events(self):
+        self.released.wait(timeout=3)
+        return
+        yield
+
+    def terminate(self):
+        super().terminate()
+        self.released.set()
+
+
 class FakeRuntime:
     def __init__(self, session=None, status=None):
         self.session = session or FakeRuntimeSession()
@@ -57,12 +73,14 @@ class FakeRuntime:
             model="test-model",
         )
         self.request = None
+        self.started = threading.Event()
 
     def status(self):
         return self._status
 
     def start(self, request):
         self.request = request
+        self.started.set()
         return self.session
 
 
@@ -114,6 +132,14 @@ class WorkbenchHttpTests(unittest.TestCase):
         cls.httpd.shutdown()
         cls.httpd.server_close()
         cls.thread.join(timeout=2)
+
+    def setUp(self):
+        self.task_manager = TaskManager()
+        self.tasks_patch = patch.object(server, "TASKS", self.task_manager)
+        self.tasks_patch.start()
+
+    def tearDown(self):
+        self.tasks_patch.stop()
 
     def request(self, method, path, body=None, headers=None):
         connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=3)
@@ -263,10 +289,17 @@ class WorkbenchHttpTests(unittest.TestCase):
 
         self.assertEqual(status, 200)
         self.assertIn("application/x-ndjson", headers["Content-Type"])
+        self.assertRegex(headers["X-Task-ID"], r"^task_[0-9a-f]{32}$")
         events = [json.loads(line) for line in body.decode("utf-8").splitlines()]
-        self.assertEqual(events[0], {"type": "thread", "thread_id": "thread-1"})
-        self.assertEqual(events[1], {"type": "assistant", "text": "完成"})
-        self.assertEqual(events[2]["type"], "completed")
+        self.assertEqual(events[0]["type"], "task")
+        self.assertEqual(events[0]["task_id"], headers["X-Task-ID"])
+        self.assertEqual(events[1], {"type": "thread", "thread_id": "thread-1"})
+        self.assertEqual(events[2], {"type": "assistant", "text": "完成"})
+        self.assertEqual(events[3]["type"], "completed")
+        self.assertEqual(
+            self.task_manager.get(headers["X-Task-ID"]).status,
+            "completed",
+        )
         self.assertEqual(runtime.request.sandbox, "read-only")
         self.assertEqual(runtime.request.thread_id, "")
         self.assertIn("用户任务：\n分析这个页面", runtime.request.prompt)
@@ -308,7 +341,86 @@ class WorkbenchHttpTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(
             [json.loads(line) for line in body.decode("utf-8").splitlines()],
-            [{"type": "error", "message": "diagnostic line"}],
+            [
+                {
+                    "type": "task",
+                    "task_id": json.loads(body.decode("utf-8").splitlines()[0])["task_id"],
+                },
+                {"type": "error", "message": "diagnostic line"},
+            ],
+        )
+
+    def test_cancel_endpoint_terminates_active_task(self):
+        record = self.task_manager.create()
+        session = FakeRuntimeSession()
+        self.task_manager.bind_session(record.task_id, session)
+
+        status, _, body = self.request(
+            "POST",
+            f"/api/tasks/{record.task_id}/cancel",
+            body=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["task"]["status"], "cancel_requested")
+        self.assertTrue(session.terminated)
+
+    def test_cancel_endpoint_stops_streaming_chat_end_to_end(self):
+        session = BlockingRuntimeSession()
+        runtime = FakeRuntime(session=session)
+        result = {}
+
+        def run_chat():
+            result["response"] = self.post_json({"message": "long task"})
+
+        with patch.object(server, "RUNTIME", runtime):
+            worker = threading.Thread(target=run_chat)
+            worker.start()
+            self.assertTrue(runtime.started.wait(timeout=1))
+            task_id = self.task_manager.snapshots()[0]["task_id"]
+            cancel_status, _, _ = self.request(
+                "POST",
+                f"/api/tasks/{task_id}/cancel",
+                body=b"{}",
+                headers={"Content-Type": "application/json"},
+            )
+            worker.join(timeout=3)
+
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(cancel_status, 200)
+        status, headers, body = result["response"]
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["X-Task-ID"], task_id)
+        events = [json.loads(line) for line in body.decode("utf-8").splitlines()]
+        self.assertEqual(events[-1], {"type": "cancelled", "task_id": task_id})
+        self.assertEqual(self.task_manager.get(task_id).status, "cancelled")
+        self.assertTrue(session.terminated)
+
+    def test_cancel_endpoint_rejects_unknown_and_terminal_tasks(self):
+        unknown_id = "task_" + ("0" * 32)
+        status, _, body = self.request(
+            "POST",
+            f"/api/tasks/{unknown_id}/cancel",
+            body=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 404)
+        self.assert_api_error(body, server.ErrorCode.TASK_NOT_FOUND, "任务不存在")
+
+        record = self.task_manager.create()
+        self.task_manager.finish(record.task_id, "completed")
+        status, _, body = self.request(
+            "POST",
+            f"/api/tasks/{record.task_id}/cancel",
+            body=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(status, 409)
+        self.assert_api_error(
+            body,
+            server.ErrorCode.TASK_NOT_CANCELLABLE,
+            "任务已经结束，无法取消",
         )
 
 

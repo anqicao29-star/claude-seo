@@ -99,7 +99,9 @@
   .composer-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:6px; }
   .context { color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .send { padding:7px 15px; background:var(--text); color:var(--panel); font-weight:650; }
+  .cancel { padding:7px 12px; border:1px solid var(--line); background:var(--panel); color:var(--danger); border-radius:9px; cursor:pointer; }
   .send:disabled { opacity:.35; cursor:not-allowed; }
+  .cancel:disabled { opacity:.35; cursor:not-allowed; }
   .hint { max-width:900px; margin:6px auto 0; color:var(--muted); font-size:10.5px; text-align:center; }
 
   @media (max-width:800px) {
@@ -168,7 +170,7 @@
           <textarea id="prompt" rows="2" placeholder="描述你的目标，例如：分析这个网址，或者优化项目里的三篇文章…"></textarea>
           <div class="composer-foot">
             <div class="context" id="context">自动选择 SEO 技能 · 当前仅分析，不修改文件</div>
-            <button class="send" id="send">发送</button>
+            <div><button class="cancel" id="cancel" disabled>取消任务</button> <button class="send" id="send">发送</button></div>
           </div>
         </div>
         <div class="hint">AI 可能运行脚本或读取文件。启用写入权限时，请检查最终修改结果。</div>
@@ -181,7 +183,8 @@
 const $ = selector => document.querySelector(selector);
 const state = {
   skills: [], selectedSkill: "", threadId: localStorage.getItem("claudeSeoThread") || "",
-  running: false, messages: JSON.parse(localStorage.getItem("claudeSeoMessages") || "[]")
+  running: false, messages: JSON.parse(localStorage.getItem("claudeSeoMessages") || "[]"),
+  activeTaskId: ""
 };
 
 function escapeHtml(value) {
@@ -268,6 +271,9 @@ function createPending() {
 function handleEvent(event, pending, result) {
   if (event.type === "thread") {
     state.threadId = event.thread_id; saveConversation(); updateContext();
+  } else if (event.type === "task") {
+    state.activeTaskId = event.task_id;
+    $("#cancel").disabled = false;
   } else if (event.type === "status") {
     pending.querySelector(".pending-text").textContent = event.text;
   } else if (event.type === "activity") {
@@ -283,6 +289,26 @@ function handleEvent(event, pending, result) {
     pending.querySelector(".warning").textContent = event.message;
   } else if (event.type === "error") {
     result.error = event.message || "任务执行失败";
+  } else if (event.type === "cancelled") {
+    result.cancelled = true;
+  }
+}
+
+async function cancelTask() {
+  if (!state.running || !state.activeTaskId) return;
+  $("#cancel").disabled = true;
+  try {
+    const response = await fetch(`/api/tasks/${encodeURIComponent(state.activeTaskId)}/cancel`, {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      const message = typeof body.error === "object" ? body.error.message : body.error;
+      throw new Error(message || `取消失败：${response.status}`);
+    }
+  } catch (error) {
+    addMessage("assistant", `无法取消任务：${error.message}`, {error: true});
+    $("#cancel").disabled = false;
   }
 }
 
@@ -298,7 +324,7 @@ async function sendMessage(prefill) {
   addMessage("user", message);
   $("#prompt").value = "";
   const pending = createPending();
-  const result = {text: "", error: ""};
+  const result = {text: "", error: "", cancelled: false};
 
   try {
     const response = await fetch("/api/chat", {
@@ -310,6 +336,8 @@ async function sendMessage(prefill) {
       const message = typeof body.error === "object" ? body.error.message : body.error;
       throw new Error(message || `请求失败：${response.status}`);
     }
+    state.activeTaskId = response.headers.get("X-Task-ID") || "";
+    $("#cancel").disabled = !state.activeTaskId;
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -326,9 +354,11 @@ async function sendMessage(prefill) {
     result.error = error.message;
   } finally {
     pending.remove();
-    addMessage("assistant", result.error || result.text || "任务已结束，但 Codex 没有返回文字结果。", {error: Boolean(result.error)});
+    addMessage("assistant", result.cancelled ? "任务已取消。" : (result.error || result.text || "任务已结束，但 Codex 没有返回文字结果。"), {error: Boolean(result.error)});
     state.running = false;
+    state.activeTaskId = "";
     $("#send").disabled = false;
+    $("#cancel").disabled = true;
     $("#prompt").disabled = false;
     $("#prompt").focus();
   }
@@ -354,6 +384,7 @@ async function init() {
   $("#sandbox").addEventListener("change", updateContext);
   $("#newChat").onclick = newConversation;
   $("#send").onclick = () => sendMessage();
+  $("#cancel").onclick = cancelTask;
   $("#prompt").addEventListener("keydown", event => {
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); }
   });

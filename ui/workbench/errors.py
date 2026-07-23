@@ -15,6 +15,9 @@ class ErrorCode:
     INVALID_FIELD = "request.invalid_field"
     SKILL_NOT_FOUND = "skill.not_found"
     MODE_DENIED = "workspace.mode_denied"
+    TASK_NOT_FOUND = "task.not_found"
+    TASK_NOT_CANCELLABLE = "task.not_cancellable"
+    TASK_CAPACITY = "task.capacity_exceeded"
 
 
 def error_payload(
@@ -35,4 +38,3 @@ def error_payload(
             "details": details or {},
         }
     }
-
