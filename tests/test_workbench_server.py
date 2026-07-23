@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import http.client
 import importlib.util
-import io
 import json
 import threading
 import unittest
@@ -24,36 +23,47 @@ server = importlib.util.module_from_spec(SERVER_SPEC)
 assert SERVER_SPEC.loader is not None
 SERVER_SPEC.loader.exec_module(server)
 
-
-class CapturingStdin:
-    def __init__(self):
-        self.text = ""
-        self.closed = False
-
-    def write(self, value):
-        self.text += value
-        return len(value)
-
-    def close(self):
-        self.closed = True
+from workbench.runtime import RuntimeEvent, RuntimeStatus  # noqa: E402
 
 
-class FakeProcess:
-    def __init__(self, stdout_lines=None, stderr_text="", return_code=0):
-        self.stdin = CapturingStdin()
-        self.stdout = iter(stdout_lines or [])
-        self.stderr = io.StringIO(stderr_text)
+class FakeRuntimeSession:
+    def __init__(self, events=None, stderr_text="", return_code=0):
+        self._events = events or []
+        self.stderr_text = stderr_text
         self.return_code = return_code
         self.terminated = False
+
+    def events(self):
+        yield from self._events
 
     def wait(self):
         return self.return_code
 
-    def poll(self):
-        return self.return_code
+    def stderr_tail(self, limit=5):
+        return self.stderr_text
 
     def terminate(self):
         self.terminated = True
+
+
+class FakeRuntime:
+    def __init__(self, session=None, status=None):
+        self.session = session or FakeRuntimeSession()
+        self._status = status or RuntimeStatus(
+            available=True,
+            version="codex-cli test",
+            authenticated=True,
+            authentication_status="Logged in",
+            model="test-model",
+        )
+        self.request = None
+
+    def status(self):
+        return self._status
+
+    def start(self, request):
+        self.request = request
+        return self.session
 
 
 class WorkbenchFunctionTests(unittest.TestCase):
@@ -70,60 +80,17 @@ class WorkbenchFunctionTests(unittest.TestCase):
             "继续上一项任务",
         )
 
-    def test_normalize_event_maps_thread_and_terminal_events(self):
-        self.assertEqual(
-            server.normalize_event({"type": "thread.started", "thread_id": "thread-1"}),
-            {"type": "thread", "thread_id": "thread-1"},
-        )
-        self.assertEqual(
-            server.normalize_event({"type": "turn.completed", "usage": {"tokens": 3}}),
-            {"type": "completed", "usage": {"tokens": 3}},
-        )
-        self.assertEqual(
-            server.normalize_event(
-                {"type": "turn.failed", "error": {"message": "runtime failed"}}
-            ),
-            {"type": "error", "message": "runtime failed"},
-        )
-
-    def test_normalize_event_maps_agent_and_activity_items(self):
-        self.assertEqual(
-            server.normalize_event(
-                {
-                    "type": "item.completed",
-                    "item": {"type": "agent_message", "text": "完成"},
-                }
-            ),
-            {"type": "assistant", "text": "完成"},
-        )
-        self.assertEqual(
-            server.normalize_event(
-                {
-                    "type": "item.started",
-                    "item": {
-                        "type": "command_execution",
-                        "command": "python3 check.py",
-                        "status": "in_progress",
-                    },
-                }
-            ),
-            {
-                "type": "activity",
-                "kind": "command",
-                "text": "python3 check.py",
-                "status": "in_progress",
-            },
-        )
-
-    def test_normalize_event_ignores_unknown_input(self):
-        self.assertIsNone(server.normalize_event({"type": "future.event"}))
-
     def test_api_runtime_uses_last_output_lines(self):
-        outputs = [
-            (0, "notice\ncodex-cli 1.2.3"),
-            (0, "notice\nLogged in using ChatGPT"),
-        ]
-        with patch.object(server, "command_output", side_effect=outputs) as command:
+        runtime = FakeRuntime(
+            status=RuntimeStatus(
+                available=True,
+                version="codex-cli 1.2.3",
+                authenticated=True,
+                authentication_status="Logged in using ChatGPT",
+                model="test-model",
+            )
+        )
+        with patch.object(server, "RUNTIME", runtime):
             result = server.api_runtime()
 
         self.assertTrue(result["codex_available"])
@@ -131,14 +98,7 @@ class WorkbenchFunctionTests(unittest.TestCase):
         self.assertEqual(result["codex_version"], "codex-cli 1.2.3")
         self.assertEqual(result["login_status"], "Logged in using ChatGPT")
         self.assertEqual(result["max_sandbox"], server.MAX_SANDBOX)
-        self.assertEqual(
-            command.call_args_list[0].args[0],
-            [server.CODEX_BIN, "--version"],
-        )
-        self.assertEqual(
-            command.call_args_list[1].args[0],
-            [server.CODEX_BIN, "login", "status"],
-        )
+        self.assertEqual(result["model"], "test-model")
 
 
 class WorkbenchHttpTests(unittest.TestCase):
@@ -283,23 +243,16 @@ class WorkbenchHttpTests(unittest.TestCase):
                 self.assert_api_error(body, code, message)
 
     def test_new_chat_builds_current_codex_command_and_streams_ndjson(self):
-        process = FakeProcess(
-            stdout_lines=[
-                json.dumps({"type": "thread.started", "thread_id": "thread-1"}) + "\n",
-                json.dumps(
-                    {
-                        "type": "item.completed",
-                        "item": {"type": "agent_message", "text": "完成"},
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n",
-                json.dumps({"type": "turn.completed", "usage": {"tokens": 5}})
-                + "\n",
+        session = FakeRuntimeSession(
+            events=[
+                RuntimeEvent("thread", {"thread_id": "thread-1"}),
+                RuntimeEvent("assistant", {"text": "完成"}),
+                RuntimeEvent("completed", {"usage": {"tokens": 5}}),
             ]
         )
+        runtime = FakeRuntime(session=session)
 
-        with patch.object(server.subprocess, "Popen", return_value=process) as popen:
+        with patch.object(server, "RUNTIME", runtime):
             status, headers, body = self.post_json(
                 {
                     "message": "分析这个页面",
@@ -314,44 +267,20 @@ class WorkbenchHttpTests(unittest.TestCase):
         self.assertEqual(events[0], {"type": "thread", "thread_id": "thread-1"})
         self.assertEqual(events[1], {"type": "assistant", "text": "完成"})
         self.assertEqual(events[2]["type"], "completed")
-        command = popen.call_args.args[0]
-        self.assertEqual(
-            command,
-            [
-                server.CODEX_BIN,
-                "exec",
-                "--model",
-                server.CODEX_MODEL,
-                "--json",
-                "--color",
-                "never",
-                "--sandbox",
-                "read-only",
-                "-c",
-                'approval_policy="never"',
-                "--skip-git-repo-check",
-                "-",
-            ],
-        )
-        self.assertIn("用户任务：\n分析这个页面", process.stdin.text)
-        self.assertTrue(process.stdin.closed)
+        self.assertEqual(runtime.request.sandbox, "read-only")
+        self.assertEqual(runtime.request.thread_id, "")
+        self.assertIn("用户任务：\n分析这个页面", runtime.request.prompt)
+        self.assertTrue(session.terminated)
 
     def test_resume_chat_uses_thread_id_and_requested_sandbox(self):
-        process = FakeProcess(
-            stdout_lines=[
-                json.dumps(
-                    {
-                        "type": "item.completed",
-                        "item": {"type": "agent_message", "text": "继续完成"},
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            ]
+        runtime = FakeRuntime(
+            session=FakeRuntimeSession(
+                events=[RuntimeEvent("assistant", {"text": "继续完成"})]
+            )
         )
 
         with patch.object(server, "MAX_SANDBOX", "workspace-write"):
-            with patch.object(server.subprocess, "Popen", return_value=process) as popen:
+            with patch.object(server, "RUNTIME", runtime):
                 status, _, _ = self.post_json(
                     {
                         "message": "继续",
@@ -361,30 +290,19 @@ class WorkbenchHttpTests(unittest.TestCase):
                 )
 
         self.assertEqual(status, 200)
-        self.assertEqual(
-            popen.call_args.args[0],
-            [
-                server.CODEX_BIN,
-                "exec",
-                "resume",
-                "--model",
-                server.CODEX_MODEL,
-                "--json",
-                "--skip-git-repo-check",
-                "-c",
-                'sandbox_mode="workspace-write"',
-                "-c",
-                'approval_policy="never"',
-                "thread_123",
-                "-",
-            ],
-        )
-        self.assertEqual(process.stdin.text, "继续")
+        self.assertEqual(runtime.request.thread_id, "thread_123")
+        self.assertEqual(runtime.request.sandbox, "workspace-write")
+        self.assertEqual(runtime.request.prompt, "继续")
 
     def test_process_failure_falls_back_to_recent_stderr(self):
-        process = FakeProcess(stderr_text="diagnostic line\n", return_code=7)
+        runtime = FakeRuntime(
+            session=FakeRuntimeSession(
+                stderr_text="diagnostic line",
+                return_code=7,
+            )
+        )
 
-        with patch.object(server.subprocess, "Popen", return_value=process):
+        with patch.object(server, "RUNTIME", runtime):
             status, _, body = self.post_json({"message": "test"})
 
         self.assertEqual(status, 200)

@@ -11,9 +11,7 @@ import json
 import os
 import re
 import sqlite3
-import subprocess
 import sys
-import threading
 import uuid
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -24,6 +22,7 @@ if str(UI_DIR) not in sys.path:
 
 from workbench.config import load_config
 from workbench.errors import ErrorCode, error_payload
+from workbench.runtime import CodexCliRuntime, RuntimeRequest
 
 
 CONFIG = load_config(Path(__file__))
@@ -37,6 +36,7 @@ CODEX_MODEL = CONFIG.codex_model
 MAX_SANDBOX = CONFIG.max_sandbox
 MAX_REQUEST_BYTES = CONFIG.max_request_bytes
 MAX_MESSAGE_CHARS = CONFIG.max_message_chars
+RUNTIME = CodexCliRuntime(CODEX_BIN, CODEX_MODEL, PROJECT_DIR)
 LOCAL_HOST_PATTERN = re.compile(r"\A(?:127\.0\.0\.1|localhost)(?::\d{1,5})?\Z", re.IGNORECASE)
 
 CATEGORIES = {
@@ -156,26 +156,14 @@ def api_drift():
         return {"available": False, "error": str(error), "baselines": []}
 
 
-def command_output(args, timeout=8):
-    try:
-        result = subprocess.run(
-            args, cwd=PROJECT_DIR, capture_output=True, text=True,
-            timeout=timeout, check=False,
-        )
-        return result.returncode, (result.stdout + result.stderr).strip()
-    except (OSError, subprocess.TimeoutExpired) as error:
-        return 1, str(error)
-
-
 def api_runtime():
-    version_code, version = command_output([CODEX_BIN, "--version"])
-    login_code, login = command_output([CODEX_BIN, "login", "status"])
+    status = RUNTIME.status()
     return {
-        "codex_available": version_code == 0,
-        "codex_version": version.splitlines()[-1] if version else "未检测到",
-        "logged_in": login_code == 0,
-        "login_status": login.splitlines()[-1] if login else "未登录",
-        "model": CODEX_MODEL,
+        "codex_available": status.available,
+        "codex_version": status.version,
+        "logged_in": status.authenticated,
+        "login_status": status.authentication_status,
+        "model": status.model,
         "workspace": str(PROJECT_DIR),
         "max_sandbox": MAX_SANDBOX,
     }
@@ -201,40 +189,6 @@ def build_prompt(message, skill, is_new_thread):
     if skill:
         guidance += f" 用户选择了 {skill}，请优先读取 skills/{skill}/SKILL.md 并遵循其中的工作流。"
     return f"{guidance}\n\n用户任务：\n{message}"
-
-
-def normalize_event(event):
-    event_type = event.get("type", "")
-    if event_type == "thread.started":
-        return {"type": "thread", "thread_id": event.get("thread_id", "")}
-    if event_type == "turn.started":
-        return {"type": "status", "text": "Codex 已开始处理任务"}
-    if event_type == "turn.completed":
-        return {"type": "completed", "usage": event.get("usage", {})}
-    if event_type == "turn.failed":
-        error = event.get("error") or {}
-        return {"type": "error", "message": error.get("message", "任务执行失败")}
-    if event_type == "error":
-        return {"type": "error", "message": event.get("message", "Codex 返回错误")}
-    if event_type in ("item.started", "item.updated", "item.completed"):
-        item = event.get("item") or {}
-        item_type = item.get("type", "")
-        if item_type == "agent_message" and event_type == "item.completed":
-            return {"type": "assistant", "text": item.get("text", "")}
-        if item_type == "command_execution":
-            command = item.get("command") or "正在执行命令"
-            status = item.get("status") or event_type.removeprefix("item.")
-            return {"type": "activity", "kind": "command", "text": command, "status": status}
-        if item_type in ("file_change", "file_changes"):
-            return {"type": "activity", "kind": "file", "text": "正在处理项目文件", "status": item.get("status", "")}
-        if item_type == "mcp_tool_call":
-            name = item.get("tool") or item.get("name") or "MCP 工具"
-            return {"type": "activity", "kind": "tool", "text": str(name), "status": item.get("status", "")}
-        if item_type == "web_search":
-            return {"type": "activity", "kind": "web", "text": item.get("query", "正在搜索网页"), "status": item.get("status", "")}
-        if item_type == "error" and event_type == "item.completed":
-            return {"type": "warning", "message": item.get("message", "Codex 警告")}
-    return None
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -365,7 +319,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.close_connection = True
 
-        process = None
+        runtime_session = None
 
         def emit(event):
             data = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
@@ -373,78 +327,36 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.flush()
 
         try:
-            if thread_id:
-                command = [
-                    CODEX_BIN, "exec", "resume", "--model", CODEX_MODEL,
-                    "--json", "--skip-git-repo-check",
-                    "-c", f'sandbox_mode="{sandbox}"',
-                    "-c", 'approval_policy="never"', thread_id, "-",
-                ]
-            else:
-                command = [
-                    CODEX_BIN, "exec", "--model", CODEX_MODEL, "--json",
-                    "--color", "never", "--sandbox", sandbox,
-                    "-c", 'approval_policy="never"',
-                    "--skip-git-repo-check", "-",
-                ]
-
-            environment = os.environ.copy()
-            environment.setdefault("RUST_LOG", "error")
-            process = subprocess.Popen(
-                command,
-                cwd=PROJECT_DIR,
-                env=environment,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                start_new_session=True,
+            runtime_session = RUNTIME.start(
+                RuntimeRequest(
+                    prompt=build_prompt(message, skill, not thread_id),
+                    thread_id=thread_id,
+                    sandbox=sandbox,
+                )
             )
-            stderr_lines = []
-
-            def collect_stderr():
-                for stderr_line in process.stderr:
-                    stderr_lines.append(stderr_line.rstrip())
-                    if len(stderr_lines) > 30:
-                        del stderr_lines[0]
-
-            stderr_thread = threading.Thread(target=collect_stderr, daemon=True)
-            stderr_thread.start()
-            process.stdin.write(build_prompt(message, skill, not thread_id))
-            process.stdin.close()
 
             emitted_error = False
-            for line in process.stdout:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    event = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                client_event = normalize_event(event)
-                if client_event:
-                    if client_event["type"] == "error":
-                        emitted_error = True
-                    emit(client_event)
+            for runtime_event in runtime_session.events():
+                client_event = runtime_event.legacy_payload()
+                if client_event["type"] == "error":
+                    emitted_error = True
+                emit(client_event)
 
-            return_code = process.wait()
-            stderr_thread.join(timeout=1)
+            return_code = runtime_session.wait()
             if return_code != 0 and not emitted_error:
-                detail = "\n".join(stderr_lines[-5:]).strip()
+                detail = runtime_session.stderr_tail()
                 emit({"type": "error", "message": detail or f"Codex 退出，状态码 {return_code}"})
         except BrokenPipeError:
-            if process and process.poll() is None:
-                process.terminate()
-        except (OSError, subprocess.SubprocessError) as error:
+            if runtime_session:
+                runtime_session.terminate()
+        except OSError as error:
             try:
                 emit({"type": "error", "message": f"无法启动 Codex：{error}"})
             except BrokenPipeError:
                 pass
         finally:
-            if process and process.poll() is None:
-                process.terminate()
+            if runtime_session:
+                runtime_session.terminate()
 
     def log_message(self, fmt, *args):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
