@@ -172,6 +172,14 @@ class WorkbenchHttpTests(unittest.TestCase):
             headers={"Content-Type": "application/json"},
         )
 
+    def assert_api_error(self, body, code, message):
+        error = json.loads(body)["error"]
+        self.assertEqual(error["code"], code)
+        self.assertEqual(error["message"], message)
+        self.assertFalse(error["retryable"])
+        self.assertRegex(error["request_id"], r"^req_[0-9a-f]{32}$")
+        self.assertEqual(error["details"], {})
+
     def test_unknown_api_route_returns_json_404(self):
         status, headers, body = self.request(
             "POST",
@@ -182,9 +190,10 @@ class WorkbenchHttpTests(unittest.TestCase):
 
         self.assertEqual(status, 404)
         self.assertIn("application/json", headers["Content-Type"])
-        self.assertEqual(json.loads(body), {"error": "未找到接口"})
+        self.assert_api_error(body, server.ErrorCode.ROUTE_NOT_FOUND, "未找到接口")
         self.assertEqual(headers["X-Frame-Options"], "DENY")
         self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
+        self.assertRegex(headers["X-Request-ID"], r"^req_[0-9a-f]{32}$")
 
     def test_chat_rejects_malformed_json(self):
         status, _, body = self.request(
@@ -195,7 +204,7 @@ class WorkbenchHttpTests(unittest.TestCase):
         )
 
         self.assertEqual(status, 400)
-        self.assertEqual(json.loads(body), {"error": "请求不是有效 JSON"})
+        self.assert_api_error(body, server.ErrorCode.INVALID_JSON, "请求不是有效 JSON")
 
     def test_chat_rejects_non_json_cross_site_and_foreign_host_requests(self):
         status, _, body = self.request(
@@ -205,7 +214,11 @@ class WorkbenchHttpTests(unittest.TestCase):
             headers={"Content-Type": "text/plain"},
         )
         self.assertEqual(status, 415)
-        self.assertEqual(json.loads(body), {"error": "仅支持 application/json"})
+        self.assert_api_error(
+            body,
+            server.ErrorCode.UNSUPPORTED_MEDIA_TYPE,
+            "仅支持 application/json",
+        )
 
         status, _, body = self.request(
             "POST",
@@ -217,7 +230,7 @@ class WorkbenchHttpTests(unittest.TestCase):
             },
         )
         self.assertEqual(status, 403)
-        self.assertEqual(json.loads(body), {"error": "拒绝跨站请求"})
+        self.assert_api_error(body, server.ErrorCode.ORIGIN_DENIED, "拒绝跨站请求")
 
         status, _, body = self.request(
             "POST",
@@ -229,7 +242,7 @@ class WorkbenchHttpTests(unittest.TestCase):
             },
         )
         self.assertEqual(status, 403)
-        self.assertEqual(json.loads(body), {"error": "拒绝非本机请求"})
+        self.assert_api_error(body, server.ErrorCode.HOST_DENIED, "拒绝非本机请求")
 
     def test_chat_defaults_to_read_only_server_policy(self):
         with patch.object(server, "MAX_SANDBOX", "read-only"):
@@ -238,29 +251,36 @@ class WorkbenchHttpTests(unittest.TestCase):
             )
 
         self.assertEqual(status, 403)
-        self.assertEqual(json.loads(body), {"error": "服务当前仅允许只读任务"})
+        self.assert_api_error(
+            body,
+            server.ErrorCode.MODE_DENIED,
+            "服务当前仅允许只读任务",
+        )
 
     def test_chat_rejects_invalid_thread_sandbox_and_skill(self):
         cases = [
             (
                 {"message": "test", "thread_id": "../escape"},
+                server.ErrorCode.INVALID_FIELD,
                 "会话 ID 不正确",
             ),
             (
                 {"message": "test", "sandbox": "danger-full-access"},
+                server.ErrorCode.INVALID_FIELD,
                 "不支持的权限模式",
             ),
             (
                 {"message": "test", "skill": "seo-does-not-exist"},
+                server.ErrorCode.SKILL_NOT_FOUND,
                 "选择的技能不存在",
             ),
         ]
 
-        for payload, message in cases:
+        for payload, code, message in cases:
             with self.subTest(payload=payload):
                 status, _, body = self.post_json(payload)
                 self.assertEqual(status, 400)
-                self.assertEqual(json.loads(body), {"error": message})
+                self.assert_api_error(body, code, message)
 
     def test_new_chat_builds_current_codex_command_and_streams_ndjson(self):
         process = FakeProcess(

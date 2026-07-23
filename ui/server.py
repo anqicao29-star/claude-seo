@@ -10,29 +10,33 @@
 import json
 import os
 import re
-import shutil
 import sqlite3
 import subprocess
 import sys
 import threading
+import uuid
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-
-HOME = Path.home()
-PROJECT_DIR = Path(__file__).resolve().parent.parent
 UI_DIR = Path(__file__).resolve().parent
-SKILLS_DIR = HOME / ".claude" / "skills"
-AGENTS_DIR = HOME / ".claude" / "agents"
-DRIFT_DB = HOME / ".cache" / "claude-seo" / "drift" / "baselines.db"
-CODEX_BIN = os.environ.get("CLAUDE_SEO_CODEX_BIN") or shutil.which("codex") or "codex"
-# 当前机器已验证 gpt-5.4 可与已安装 CLI 配合工作；可通过环境变量覆盖。
-CODEX_MODEL = os.environ.get("CLAUDE_SEO_CODEX_MODEL", "gpt-5.4")
-MAX_SANDBOX = os.environ.get("CLAUDE_SEO_MAX_SANDBOX", "read-only")
-if MAX_SANDBOX not in ("read-only", "workspace-write"):
-    MAX_SANDBOX = "read-only"
-MAX_REQUEST_BYTES = 256 * 1024
-MAX_MESSAGE_CHARS = 100_000
+if str(UI_DIR) not in sys.path:
+    sys.path.insert(0, str(UI_DIR))
+
+from workbench.config import load_config
+from workbench.errors import ErrorCode, error_payload
+
+
+CONFIG = load_config(Path(__file__))
+HOME = CONFIG.home
+PROJECT_DIR = CONFIG.project_dir
+SKILLS_DIR = CONFIG.skills_dir
+AGENTS_DIR = CONFIG.agents_dir
+DRIFT_DB = CONFIG.drift_db
+CODEX_BIN = CONFIG.codex_bin
+CODEX_MODEL = CONFIG.codex_model
+MAX_SANDBOX = CONFIG.max_sandbox
+MAX_REQUEST_BYTES = CONFIG.max_request_bytes
+MAX_MESSAGE_CHARS = CONFIG.max_message_chars
 LOCAL_HOST_PATTERN = re.compile(r"\A(?:127\.0\.0\.1|localhost)(?::\d{1,5})?\Z", re.IGNORECASE)
 
 CATEGORIES = {
@@ -235,6 +239,7 @@ def normalize_event(event):
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
+        self.request_id = f"req_{uuid.uuid4().hex}"
         super().__init__(*args, directory=str(UI_DIR), **kwargs)
 
     def end_headers(self):
@@ -249,6 +254,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("X-Request-ID", self.request_id)
         super().end_headers()
 
     def send_json(self, status, payload):
@@ -260,6 +266,18 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
+
+    def send_api_error(self, status, code, message, *, retryable=False, details=None):
+        self.send_json(
+            status,
+            error_payload(
+                code,
+                message,
+                self.request_id,
+                retryable=retryable,
+                details=details,
+            ),
+        )
 
     def has_allowed_host(self):
         host = self.headers.get("Host", "").strip()
@@ -274,7 +292,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if not self.has_allowed_host():
-            self.send_json(403, {"error": "拒绝非本机请求"})
+            self.send_api_error(403, ErrorCode.HOST_DENIED, "拒绝非本机请求")
             return
         route = self.path.split("?")[0]
         if route in ROUTES:
@@ -284,18 +302,22 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         if not self.has_allowed_host():
-            self.send_json(403, {"error": "拒绝非本机请求"})
+            self.send_api_error(403, ErrorCode.HOST_DENIED, "拒绝非本机请求")
             return
         route = self.path.split("?")[0]
         if route != "/api/chat":
-            self.send_json(404, {"error": "未找到接口"})
+            self.send_api_error(404, ErrorCode.ROUTE_NOT_FOUND, "未找到接口")
             return
         media_type = self.headers.get("Content-Type", "").partition(";")[0].strip().lower()
         if media_type != "application/json":
-            self.send_json(415, {"error": "仅支持 application/json"})
+            self.send_api_error(
+                415,
+                ErrorCode.UNSUPPORTED_MEDIA_TYPE,
+                "仅支持 application/json",
+            )
             return
         if not self.has_allowed_origin():
-            self.send_json(403, {"error": "拒绝跨站请求"})
+            self.send_api_error(403, ErrorCode.ORIGIN_DENIED, "拒绝跨站请求")
             return
         self.handle_chat()
 
@@ -305,12 +327,12 @@ class Handler(SimpleHTTPRequestHandler):
         except ValueError:
             content_length = 0
         if content_length <= 0 or content_length > MAX_REQUEST_BYTES:
-            self.send_json(400, {"error": "请求大小不正确"})
+            self.send_api_error(400, ErrorCode.INVALID_SIZE, "请求大小不正确")
             return
         try:
             payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            self.send_json(400, {"error": "请求不是有效 JSON"})
+            self.send_api_error(400, ErrorCode.INVALID_JSON, "请求不是有效 JSON")
             return
 
         message = str(payload.get("message", "")).strip()
@@ -318,21 +340,21 @@ class Handler(SimpleHTTPRequestHandler):
         skill = str(payload.get("skill", "")).strip()
         sandbox = str(payload.get("sandbox", "read-only"))
         if not message or len(message) > MAX_MESSAGE_CHARS:
-            self.send_json(400, {"error": "请输入有效任务内容"})
+            self.send_api_error(400, ErrorCode.INVALID_FIELD, "请输入有效任务内容")
             return
         if thread_id and not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", thread_id):
-            self.send_json(400, {"error": "会话 ID 不正确"})
+            self.send_api_error(400, ErrorCode.INVALID_FIELD, "会话 ID 不正确")
             return
         if sandbox not in ("read-only", "workspace-write"):
-            self.send_json(400, {"error": "不支持的权限模式"})
+            self.send_api_error(400, ErrorCode.INVALID_FIELD, "不支持的权限模式")
             return
         if sandbox == "workspace-write" and MAX_SANDBOX != "workspace-write":
-            self.send_json(403, {"error": "服务当前仅允许只读任务"})
+            self.send_api_error(403, ErrorCode.MODE_DENIED, "服务当前仅允许只读任务")
             return
         if skill:
             skill_path = PROJECT_DIR / "skills" / skill / "SKILL.md"
             if not re.fullmatch(r"seo(?:-[a-z0-9-]+)?", skill) or not skill_path.is_file():
-                self.send_json(400, {"error": "选择的技能不存在"})
+                self.send_api_error(400, ErrorCode.SKILL_NOT_FOUND, "选择的技能不存在")
                 return
 
         self.send_response(200)

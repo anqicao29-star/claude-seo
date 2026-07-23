@@ -307,7 +307,8 @@ async function sendMessage(prefill) {
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      throw new Error(body.error || `请求失败：${response.status}`);
+      const message = typeof body.error === "object" ? body.error.message : body.error;
+      throw new Error(message || `请求失败：${response.status}`);
     }
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
