@@ -47,6 +47,7 @@ MAX_REQUEST_BYTES = CONFIG.max_request_bytes
 MAX_MESSAGE_CHARS = CONFIG.max_message_chars
 MAX_CONCURRENT_TASKS = CONFIG.max_concurrent_tasks
 TASK_TIMEOUT_SECONDS = CONFIG.task_timeout_seconds
+MAX_CONCURRENT_TASKS_LIMIT = 4
 RUNTIME = CodexCliRuntime(CODEX_BIN, CODEX_MODEL, PROJECT_DIR)
 TASKS = TaskManager(max_active=MAX_CONCURRENT_TASKS)
 SESSIONS = SessionManager()
@@ -181,7 +182,8 @@ def api_runtime():
         "model": status.model,
         "workspace": str(PROJECT_DIR),
         "max_sandbox": MAX_SANDBOX,
-        "max_concurrent_tasks": MAX_CONCURRENT_TASKS,
+        "max_concurrent_tasks": TASKS.get_max_active(),
+        "max_concurrent_tasks_limit": MAX_CONCURRENT_TASKS_LIMIT,
         "task_timeout_seconds": TASK_TIMEOUT_SECONDS,
     }
 
@@ -277,7 +279,14 @@ class Handler(SimpleHTTPRequestHandler):
             return
         route = self.path.split("?")[0]
         cancel_match = TASK_CANCEL_PATTERN.fullmatch(route)
-        if route not in ("/api/chat", "/api/v1/chat") and cancel_match is None:
+        if (
+            route not in (
+                "/api/chat",
+                "/api/v1/chat",
+                "/api/settings/runtime",
+            )
+            and cancel_match is None
+        ):
             self.send_api_error(404, ErrorCode.ROUTE_NOT_FOUND, "未找到接口")
             return
         media_type = self.headers.get("Content-Type", "").partition(";")[0].strip().lower()
@@ -293,8 +302,52 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if cancel_match is not None:
             self.handle_cancel(cancel_match.group(1))
+        elif route == "/api/settings/runtime":
+            self.handle_runtime_settings()
         else:
             self.handle_chat(versioned=route == "/api/v1/chat")
+
+    def read_json_body(self):
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            content_length = 0
+        if content_length <= 0 or content_length > MAX_REQUEST_BYTES:
+            self.send_api_error(400, ErrorCode.INVALID_SIZE, "请求大小不正确")
+            return None
+        try:
+            return json.loads(self.rfile.read(content_length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self.send_api_error(400, ErrorCode.INVALID_JSON, "请求不是有效 JSON")
+            return None
+
+    def handle_runtime_settings(self):
+        payload = self.read_json_body()
+        if payload is None:
+            return
+        max_concurrent_tasks = payload.get("max_concurrent_tasks")
+        if (
+            not isinstance(max_concurrent_tasks, int)
+            or isinstance(max_concurrent_tasks, bool)
+            or max_concurrent_tasks < 1
+            or max_concurrent_tasks > MAX_CONCURRENT_TASKS_LIMIT
+        ):
+            self.send_api_error(
+                400,
+                ErrorCode.INVALID_FIELD,
+                "并发任务数必须是 1 到 4 的整数",
+            )
+            return
+        TASKS.set_max_active(max_concurrent_tasks)
+        self.send_json(
+            200,
+            {
+                "settings": {
+                    "max_concurrent_tasks": TASKS.get_max_active(),
+                    "max_concurrent_tasks_limit": MAX_CONCURRENT_TASKS_LIMIT,
+                }
+            },
+        )
 
     def handle_cancel(self, task_id):
         try:
@@ -312,17 +365,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_json(200, {"task": task})
 
     def handle_chat(self, versioned=False):
-        try:
-            content_length = int(self.headers.get("Content-Length", "0"))
-        except ValueError:
-            content_length = 0
-        if content_length <= 0 or content_length > MAX_REQUEST_BYTES:
-            self.send_api_error(400, ErrorCode.INVALID_SIZE, "请求大小不正确")
-            return
-        try:
-            payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            self.send_api_error(400, ErrorCode.INVALID_JSON, "请求不是有效 JSON")
+        payload = self.read_json_body()
+        if payload is None:
             return
 
         message = str(payload.get("message", "")).strip()

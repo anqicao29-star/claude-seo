@@ -68,7 +68,7 @@ class ConfigTests(unittest.TestCase):
 
         self.assertEqual(bounded.max_concurrent_tasks, 4)
         self.assertEqual(bounded.task_timeout_seconds, 30)
-        self.assertEqual(invalid.max_concurrent_tasks, 1)
+        self.assertEqual(invalid.max_concurrent_tasks, 2)
         self.assertEqual(invalid.task_timeout_seconds, 900)
 
 

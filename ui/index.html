@@ -136,6 +136,12 @@
       <div class="chat-head">
         <div class="chat-title"><strong id="chatTitle">自由对话</strong><span id="threadLabel">新会话</span></div>
         <div class="controls">
+          <select id="concurrency" title="允许多个独立窗口或会话同时运行任务">
+            <option value="1">并发 1 个任务</option>
+            <option value="2">并发 2 个任务</option>
+            <option value="3">并发 3 个任务</option>
+            <option value="4">并发 4 个任务</option>
+          </select>
           <select id="sandbox" title="Codex 文件权限">
             <option value="read-only">只读分析</option>
             <option value="workspace-write">允许修改项目文件</option>
@@ -184,7 +190,7 @@ const $ = selector => document.querySelector(selector);
 const state = {
   skills: [], selectedSkill: "", sessionId: localStorage.getItem("claudeSeoSession") || "",
   running: false, messages: JSON.parse(localStorage.getItem("claudeSeoMessages") || "[]"),
-  activeTaskId: ""
+  activeTaskId: "", maxConcurrentTasks: 2
 };
 
 function escapeHtml(value) {
@@ -213,6 +219,26 @@ function setRuntime(runtime) {
   writeOption.disabled = !writeEnabled;
   writeOption.textContent = writeEnabled ? "允许修改项目文件" : "允许修改项目文件（服务未启用）";
   if (!writeEnabled && $("#sandbox").value === "workspace-write") $("#sandbox").value = "read-only";
+  state.maxConcurrentTasks = runtime.max_concurrent_tasks || 2;
+  $("#concurrency").value = String(state.maxConcurrentTasks);
+}
+
+async function updateConcurrency(value, persist = true) {
+  const response = await fetch("/api/settings/runtime", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({max_concurrent_tasks: value})
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const message = typeof body.error === "object" ? body.error.message : body.error;
+    throw new Error(message || `更新并发设置失败：${response.status}`);
+  }
+  const body = await response.json();
+  state.maxConcurrentTasks = body.settings.max_concurrent_tasks;
+  $("#concurrency").value = String(state.maxConcurrentTasks);
+  if (persist) localStorage.setItem("claudeSeoConcurrency", String(state.maxConcurrentTasks));
+  updateContext();
 }
 
 function renderSkills() {
@@ -233,7 +259,7 @@ function renderSkills() {
 function updateContext() {
   const skill = state.selectedSkill ? `优先使用 ${state.selectedSkill}` : "自动选择 SEO 技能";
   const permission = $("#sandbox").value === "workspace-write" ? "允许修改项目文件" : "当前仅分析，不修改文件";
-  $("#context").textContent = `${skill} · ${permission}`;
+  $("#context").textContent = `${skill} · ${permission} · 最多 ${state.maxConcurrentTasks} 个并行任务`;
   $("#threadLabel").textContent = state.sessionId ? `会话 ${state.sessionId.slice(8, 16)}…` : "新会话";
 }
 
@@ -388,6 +414,10 @@ async function init() {
   try {
     const [runtime, skills] = await Promise.all([getJson("/api/runtime"), getJson("/api/skills")]);
     setRuntime(runtime); state.skills = skills.skills; renderSkills();
+    const savedConcurrency = Number(localStorage.getItem("claudeSeoConcurrency"));
+    if ([1, 2, 3, 4].includes(savedConcurrency) && savedConcurrency !== state.maxConcurrentTasks) {
+      await updateConcurrency(savedConcurrency, false);
+    }
   } catch (error) {
     $("#runtime").innerHTML = `<i class="dot bad"></i><span>${escapeHtml(error.message)}</span>`;
   }
@@ -395,6 +425,15 @@ async function init() {
   if (state.messages.length) renderMessages();
   $("#skillSearch").addEventListener("input", renderSkills);
   $("#sandbox").addEventListener("change", updateContext);
+  $("#concurrency").addEventListener("change", async event => {
+    const previous = state.maxConcurrentTasks;
+    try {
+      await updateConcurrency(Number(event.target.value));
+    } catch (error) {
+      event.target.value = String(previous);
+      addMessage("assistant", `无法更新并发设置：${error.message}`, {error: true});
+    }
+  });
   $("#newChat").onclick = newConversation;
   $("#send").onclick = () => sendMessage();
   $("#cancel").onclick = cancelTask;

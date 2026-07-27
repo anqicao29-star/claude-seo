@@ -54,6 +54,19 @@ class TaskManager:
         self._records: Dict[str, TaskRecord] = {}
         self._lock = threading.RLock()
 
+    def set_max_active(self, max_active: int) -> int:
+        if not isinstance(max_active, int) or isinstance(max_active, bool):
+            raise ValueError("max_active must be an integer")
+        if max_active < 1 or max_active > 4:
+            raise ValueError("max_active must be between 1 and 4")
+        with self._lock:
+            self.max_active = max_active
+            return self.max_active
+
+    def get_max_active(self) -> int:
+        with self._lock:
+            return self.max_active
+
     def _trim_terminal_records(self) -> None:
         terminal = [
             record

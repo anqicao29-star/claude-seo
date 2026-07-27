@@ -261,6 +261,36 @@ class WorkbenchHttpTests(unittest.TestCase):
             "服务当前仅允许只读任务",
         )
 
+    def test_runtime_settings_update_concurrency_limit(self):
+        status, _, body = self.request(
+            "POST",
+            "/api/settings/runtime",
+            body=json.dumps({"max_concurrent_tasks": 3}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+
+        self.assertEqual(status, 200)
+        settings = json.loads(body)["settings"]
+        self.assertEqual(settings["max_concurrent_tasks"], 3)
+        self.assertEqual(settings["max_concurrent_tasks_limit"], 4)
+        self.assertEqual(self.task_manager.get_max_active(), 3)
+
+    def test_runtime_settings_reject_invalid_concurrency_values(self):
+        for value in (0, 5, True, "2"):
+            with self.subTest(value=value):
+                status, _, body = self.request(
+                    "POST",
+                    "/api/settings/runtime",
+                    body=json.dumps({"max_concurrent_tasks": value}).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                )
+                self.assertEqual(status, 400)
+                self.assert_api_error(
+                    body,
+                    server.ErrorCode.INVALID_FIELD,
+                    "并发任务数必须是 1 到 4 的整数",
+                )
+
     def test_chat_rejects_invalid_thread_sandbox_and_skill(self):
         cases = [
             (

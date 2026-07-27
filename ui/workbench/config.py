@@ -69,7 +69,7 @@ def load_config(
         max_concurrent_tasks=_bounded_int(
             values,
             "CLAUDE_SEO_MAX_CONCURRENT_TASKS",
-            1,
+            2,
             1,
             4,
         ),

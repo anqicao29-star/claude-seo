@@ -86,6 +86,24 @@ class TaskManagerTests(unittest.TestCase):
 
         self.assertEqual(second.status, "starting")
 
+    def test_runtime_concurrency_setting_allows_selected_number_of_tasks(self):
+        manager = TaskManager(max_records=10, max_active=1)
+        self.assertEqual(manager.set_max_active(2), 2)
+
+        manager.create()
+        manager.create()
+
+        with self.assertRaises(TaskCapacityError):
+            manager.create()
+
+    def test_runtime_concurrency_setting_rejects_invalid_values(self):
+        manager = TaskManager()
+
+        for value in (0, 5, True, "2"):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    manager.set_max_active(value)
+
     def test_timeout_terminates_session_and_wins_terminal_status(self):
         manager = TaskManager()
         record = manager.create()
