@@ -182,7 +182,7 @@
 <script>
 const $ = selector => document.querySelector(selector);
 const state = {
-  skills: [], selectedSkill: "", threadId: localStorage.getItem("claudeSeoThread") || "",
+  skills: [], selectedSkill: "", sessionId: localStorage.getItem("claudeSeoSession") || "",
   running: false, messages: JSON.parse(localStorage.getItem("claudeSeoMessages") || "[]"),
   activeTaskId: ""
 };
@@ -199,8 +199,9 @@ async function getJson(url) {
 
 function saveConversation() {
   localStorage.setItem("claudeSeoMessages", JSON.stringify(state.messages.slice(-60)));
-  if (state.threadId) localStorage.setItem("claudeSeoThread", state.threadId);
-  else localStorage.removeItem("claudeSeoThread");
+  if (state.sessionId) localStorage.setItem("claudeSeoSession", state.sessionId);
+  else localStorage.removeItem("claudeSeoSession");
+  localStorage.removeItem("claudeSeoThread");
 }
 
 function setRuntime(runtime) {
@@ -233,7 +234,7 @@ function updateContext() {
   const skill = state.selectedSkill ? `优先使用 ${state.selectedSkill}` : "自动选择 SEO 技能";
   const permission = $("#sandbox").value === "workspace-write" ? "允许修改项目文件" : "当前仅分析，不修改文件";
   $("#context").textContent = `${skill} · ${permission}`;
-  $("#threadLabel").textContent = state.threadId ? `会话 ${state.threadId.slice(0, 8)}…` : "新会话";
+  $("#threadLabel").textContent = state.sessionId ? `会话 ${state.sessionId.slice(8, 16)}…` : "新会话";
 }
 
 function renderMessages() {
@@ -269,8 +270,18 @@ function createPending() {
 }
 
 function handleEvent(event, pending, result) {
-  if (event.type === "thread") {
-    state.threadId = event.thread_id; saveConversation(); updateContext();
+  if (event.protocol === "claude-seo.workbench") {
+    const eventType = event.type;
+    const typeMap = {
+      "session.bound": "session", "task.started": "task", "task.status": "status",
+      "task.activity": "activity", "assistant.message": "assistant",
+      "task.warning": "warning", "task.failed": "error",
+      "task.cancelled": "cancelled", "task.completed": "completed"
+    };
+    event = {type: typeMap[eventType] || eventType, ...(event.data || {}), task_id: event.task_id};
+  }
+  if (event.type === "session") {
+    state.sessionId = event.session_id; saveConversation(); updateContext();
   } else if (event.type === "task") {
     state.activeTaskId = event.task_id;
     $("#cancel").disabled = false;
@@ -327,9 +338,9 @@ async function sendMessage(prefill) {
   const result = {text: "", error: "", cancelled: false};
 
   try {
-    const response = await fetch("/api/chat", {
+    const response = await fetch("/api/v1/chat", {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({message, thread_id: state.threadId, skill: state.selectedSkill, sandbox: $("#sandbox").value})
+      body: JSON.stringify({message, session_id: state.sessionId, skill: state.selectedSkill, sandbox: $("#sandbox").value})
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -337,6 +348,8 @@ async function sendMessage(prefill) {
       throw new Error(message || `请求失败：${response.status}`);
     }
     state.activeTaskId = response.headers.get("X-Task-ID") || "";
+    state.sessionId = response.headers.get("X-Session-ID") || state.sessionId;
+    saveConversation(); updateContext();
     $("#cancel").disabled = !state.activeTaskId;
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -366,7 +379,7 @@ async function sendMessage(prefill) {
 
 function newConversation() {
   if (state.running && !confirm("任务仍在运行，确定清空当前对话吗？")) return;
-  state.threadId = ""; state.messages = []; state.selectedSkill = "";
+  state.sessionId = ""; state.messages = []; state.selectedSkill = "";
   saveConversation();
   location.reload();
 }

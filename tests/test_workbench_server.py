@@ -24,6 +24,7 @@ assert SERVER_SPEC.loader is not None
 SERVER_SPEC.loader.exec_module(server)
 
 from workbench.runtime import RuntimeEvent, RuntimeStatus  # noqa: E402
+from workbench.sessions import SessionManager  # noqa: E402
 from workbench.tasks import TaskManager  # noqa: E402
 
 
@@ -135,10 +136,14 @@ class WorkbenchHttpTests(unittest.TestCase):
 
     def setUp(self):
         self.task_manager = TaskManager()
+        self.session_manager = SessionManager()
         self.tasks_patch = patch.object(server, "TASKS", self.task_manager)
+        self.sessions_patch = patch.object(server, "SESSIONS", self.session_manager)
         self.tasks_patch.start()
+        self.sessions_patch.start()
 
     def tearDown(self):
+        self.sessions_patch.stop()
         self.tasks_patch.stop()
 
     def request(self, method, path, body=None, headers=None):
@@ -154,6 +159,14 @@ class WorkbenchHttpTests(unittest.TestCase):
         return self.request(
             "POST",
             "/api/chat",
+            body=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+
+    def post_v1(self, payload):
+        return self.request(
+            "POST",
+            "/api/v1/chat",
             body=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
         )
@@ -268,6 +281,99 @@ class WorkbenchHttpTests(unittest.TestCase):
                 self.assertEqual(status, 400)
                 self.assert_api_error(body, code, message)
 
+    def test_v1_chat_rejects_runtime_thread_id_and_invalid_session_id(self):
+        status, _, body = self.post_v1(
+            {"message": "test", "thread_id": "codex-internal"}
+        )
+        self.assertEqual(status, 400)
+        self.assert_api_error(
+            body,
+            server.ErrorCode.INVALID_FIELD,
+            "v1 接口不接受 Runtime 会话 ID",
+        )
+
+        status, _, body = self.post_v1(
+            {"message": "test", "session_id": "../invalid"}
+        )
+        self.assertEqual(status, 400)
+        self.assert_api_error(
+            body,
+            server.ErrorCode.INVALID_FIELD,
+            "应用会话 ID 不正确",
+        )
+
+    def test_v1_chat_uses_versioned_events_and_private_session_mapping(self):
+        runtime = FakeRuntime(
+            session=FakeRuntimeSession(
+                events=[
+                    RuntimeEvent("thread", {"thread_id": "codex-thread-private"}),
+                    RuntimeEvent("status", {"text": "正在处理"}),
+                    RuntimeEvent("assistant", {"text": "完成"}),
+                    RuntimeEvent("completed", {"usage": {"tokens": 5}}),
+                ]
+            )
+        )
+
+        with patch.object(server, "RUNTIME", runtime):
+            status, headers, body = self.post_v1(
+                {"message": "分析页面", "sandbox": "read-only"}
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["X-Protocol-Version"], "1")
+        self.assertRegex(headers["X-Session-ID"], r"^session_[0-9a-f]{32}$")
+        events = [json.loads(line) for line in body.decode("utf-8").splitlines()]
+        self.assertEqual(
+            [event["type"] for event in events],
+            [
+                "session.bound",
+                "task.started",
+                "task.status",
+                "assistant.message",
+                "task.completed",
+            ],
+        )
+        self.assertEqual(
+            [event["sequence"] for event in events],
+            list(range(1, len(events) + 1)),
+        )
+        self.assertTrue(all(event["protocol"] == "claude-seo.workbench" for event in events))
+        self.assertEqual(sum(event["type"].startswith("task.") and event["type"] in {
+            "task.completed", "task.failed", "task.cancelled"
+        } for event in events), 1)
+        self.assertNotIn("codex-thread-private", body.decode("utf-8"))
+        self.assertEqual(
+            self.session_manager.runtime_thread_id(headers["X-Session-ID"]),
+            "codex-thread-private",
+        )
+        self.assertEqual(runtime.request.thread_id, "")
+
+    def test_v1_chat_resumes_using_private_runtime_mapping(self):
+        session = self.session_manager.get_or_create()
+        self.session_manager.bind_runtime_thread(
+            session.session_id,
+            "codex-thread-private",
+        )
+        runtime = FakeRuntime(
+            session=FakeRuntimeSession(
+                events=[
+                    RuntimeEvent("assistant", {"text": "继续完成"}),
+                    RuntimeEvent("completed", {"usage": {}}),
+                ]
+            )
+        )
+
+        with patch.object(server, "RUNTIME", runtime):
+            status, headers, body = self.post_v1(
+                {"message": "继续", "session_id": session.session_id}
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["X-Session-ID"], session.session_id)
+        self.assertEqual(runtime.request.thread_id, "codex-thread-private")
+        self.assertEqual(runtime.request.prompt, "继续")
+        self.assertNotIn("codex-thread-private", body.decode("utf-8"))
+
     def test_new_chat_builds_current_codex_command_and_streams_ndjson(self):
         session = FakeRuntimeSession(
             events=[
@@ -372,7 +478,7 @@ class WorkbenchHttpTests(unittest.TestCase):
         result = {}
 
         def run_chat():
-            result["response"] = self.post_json({"message": "long task"})
+            result["response"] = self.post_v1({"message": "long task"})
 
         with patch.object(server, "RUNTIME", runtime):
             worker = threading.Thread(target=run_chat)
@@ -393,7 +499,12 @@ class WorkbenchHttpTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(headers["X-Task-ID"], task_id)
         events = [json.loads(line) for line in body.decode("utf-8").splitlines()]
-        self.assertEqual(events[-1], {"type": "cancelled", "task_id": task_id})
+        self.assertEqual(events[-1]["type"], "task.cancelled")
+        self.assertEqual(events[-1]["task_id"], task_id)
+        self.assertEqual(events[-1]["data"], {"reason": "user_requested"})
+        self.assertTrue(
+            all(event["protocol"] == "claude-seo.workbench" for event in events)
+        )
         self.assertEqual(self.task_manager.get(task_id).status, "cancelled")
         self.assertTrue(session.terminated)
 

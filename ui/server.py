@@ -22,7 +22,9 @@ if str(UI_DIR) not in sys.path:
 
 from workbench.config import load_config
 from workbench.errors import ErrorCode, error_payload
+from workbench.protocol import EventStream
 from workbench.runtime import CodexCliRuntime, RuntimeRequest
+from workbench.sessions import SessionManager
 from workbench.tasks import (
     TaskCapacityError,
     TaskManager,
@@ -44,8 +46,10 @@ MAX_REQUEST_BYTES = CONFIG.max_request_bytes
 MAX_MESSAGE_CHARS = CONFIG.max_message_chars
 RUNTIME = CodexCliRuntime(CODEX_BIN, CODEX_MODEL, PROJECT_DIR)
 TASKS = TaskManager()
+SESSIONS = SessionManager()
 LOCAL_HOST_PATTERN = re.compile(r"\A(?:127\.0\.0\.1|localhost)(?::\d{1,5})?\Z", re.IGNORECASE)
 TASK_CANCEL_PATTERN = re.compile(r"\A/api/tasks/(task_[0-9a-f]{32})/cancel\Z")
+SESSION_ID_PATTERN = re.compile(r"\Asession_[0-9a-f]{32}\Z")
 
 CATEGORIES = {
     "编排": ["seo"],
@@ -268,7 +272,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
         route = self.path.split("?")[0]
         cancel_match = TASK_CANCEL_PATTERN.fullmatch(route)
-        if route != "/api/chat" and cancel_match is None:
+        if route not in ("/api/chat", "/api/v1/chat") and cancel_match is None:
             self.send_api_error(404, ErrorCode.ROUTE_NOT_FOUND, "未找到接口")
             return
         media_type = self.headers.get("Content-Type", "").partition(";")[0].strip().lower()
@@ -285,7 +289,7 @@ class Handler(SimpleHTTPRequestHandler):
         if cancel_match is not None:
             self.handle_cancel(cancel_match.group(1))
         else:
-            self.handle_chat()
+            self.handle_chat(versioned=route == "/api/v1/chat")
 
     def handle_cancel(self, task_id):
         try:
@@ -302,7 +306,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
         self.send_json(200, {"task": task})
 
-    def handle_chat(self):
+    def handle_chat(self, versioned=False):
         try:
             content_length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -318,13 +322,24 @@ class Handler(SimpleHTTPRequestHandler):
 
         message = str(payload.get("message", "")).strip()
         thread_id = str(payload.get("thread_id", "")).strip()
+        session_id = str(payload.get("session_id", "")).strip()
         skill = str(payload.get("skill", "")).strip()
         sandbox = str(payload.get("sandbox", "read-only"))
         if not message or len(message) > MAX_MESSAGE_CHARS:
             self.send_api_error(400, ErrorCode.INVALID_FIELD, "请输入有效任务内容")
             return
-        if thread_id and not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", thread_id):
+        if versioned and thread_id:
+            self.send_api_error(
+                400,
+                ErrorCode.INVALID_FIELD,
+                "v1 接口不接受 Runtime 会话 ID",
+            )
+            return
+        if not versioned and thread_id and not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", thread_id):
             self.send_api_error(400, ErrorCode.INVALID_FIELD, "会话 ID 不正确")
+            return
+        if versioned and session_id and not SESSION_ID_PATTERN.fullmatch(session_id):
+            self.send_api_error(400, ErrorCode.INVALID_FIELD, "应用会话 ID 不正确")
             return
         if sandbox not in ("read-only", "workspace-write"):
             self.send_api_error(400, ErrorCode.INVALID_FIELD, "不支持的权限模式")
@@ -337,6 +352,10 @@ class Handler(SimpleHTTPRequestHandler):
             if not re.fullmatch(r"seo(?:-[a-z0-9-]+)?", skill) or not skill_path.is_file():
                 self.send_api_error(400, ErrorCode.SKILL_NOT_FOUND, "选择的技能不存在")
                 return
+        app_session = SESSIONS.get_or_create(session_id) if versioned else None
+        runtime_thread_id = (
+            app_session.runtime_thread_id if app_session is not None else thread_id
+        )
         try:
             task = TASKS.create()
         except TaskCapacityError:
@@ -353,30 +372,79 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache, no-store")
         self.send_header("X-Accel-Buffering", "no")
         self.send_header("X-Task-ID", task.task_id)
+        if versioned:
+            self.send_header("X-Protocol-Version", "1")
+            self.send_header("X-Session-ID", app_session.session_id)
         self.send_header("Connection", "close")
         self.end_headers()
         self.close_connection = True
 
         runtime_session = None
+        protocol_stream = EventStream(task.task_id) if versioned else None
 
         def emit(event):
             data = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
             self.wfile.write(data)
             self.wfile.flush()
 
+        def emit_v1(event_type, data=None):
+            emit(protocol_stream.event(event_type, data))
+
         try:
-            emit({"type": "task", "task_id": task.task_id})
+            if versioned:
+                emit_v1(
+                    "session.bound",
+                    {
+                        "session_id": app_session.session_id,
+                        "runtime_bound": bool(runtime_thread_id),
+                    },
+                )
+                emit_v1(
+                    "task.started",
+                    {
+                        "session_id": app_session.session_id,
+                        "sandbox": sandbox,
+                    },
+                )
+            else:
+                emit({"type": "task", "task_id": task.task_id})
             runtime_session = RUNTIME.start(
                 RuntimeRequest(
-                    prompt=build_prompt(message, skill, not thread_id),
-                    thread_id=thread_id,
+                    prompt=build_prompt(message, skill, not runtime_thread_id),
+                    thread_id=runtime_thread_id,
                     sandbox=sandbox,
                 )
             )
             TASKS.bind_session(task.task_id, runtime_session)
 
             emitted_error = False
+            failure_message = ""
+            usage = {}
             for runtime_event in runtime_session.events():
+                if versioned:
+                    if runtime_event.type == "thread":
+                        runtime_id = runtime_event.data.get("thread_id", "")
+                        if runtime_id:
+                            SESSIONS.bind_runtime_thread(
+                                app_session.session_id,
+                                runtime_id,
+                            )
+                    elif runtime_event.type == "status":
+                        emit_v1("task.status", runtime_event.data)
+                    elif runtime_event.type == "activity":
+                        emit_v1("task.activity", runtime_event.data)
+                    elif runtime_event.type == "assistant":
+                        emit_v1("assistant.message", runtime_event.data)
+                    elif runtime_event.type == "warning":
+                        emit_v1("task.warning", runtime_event.data)
+                    elif runtime_event.type == "error":
+                        failure_message = runtime_event.data.get(
+                            "message",
+                            "任务执行失败",
+                        )
+                    elif runtime_event.type == "completed":
+                        usage = runtime_event.data.get("usage", {})
+                    continue
                 client_event = runtime_event.legacy_payload()
                 if client_event["type"] == "error":
                     emitted_error = True
@@ -385,15 +453,33 @@ class Handler(SimpleHTTPRequestHandler):
             return_code = runtime_session.wait()
             if TASKS.is_cancel_requested(task.task_id):
                 TASKS.finish(task.task_id, "cancelled")
-                emit({"type": "cancelled", "task_id": task.task_id})
+                if versioned:
+                    emit_v1("task.cancelled", {"reason": "user_requested"})
+                else:
+                    emit({"type": "cancelled", "task_id": task.task_id})
             elif return_code != 0 and not emitted_error:
                 detail = runtime_session.stderr_tail()
                 TASKS.finish(task.task_id, "failed")
-                emit({"type": "error", "message": detail or f"Codex 退出，状态码 {return_code}"})
+                message = detail or f"Codex 退出，状态码 {return_code}"
+                if versioned:
+                    emit_v1(
+                        "task.failed",
+                        {"code": "runtime.process_failed", "message": message},
+                    )
+                else:
+                    emit({"type": "error", "message": message})
+            elif versioned and failure_message:
+                TASKS.finish(task.task_id, "failed")
+                emit_v1(
+                    "task.failed",
+                    {"code": "runtime.task_failed", "message": failure_message},
+                )
             elif emitted_error:
                 TASKS.finish(task.task_id, "failed")
             else:
                 TASKS.finish(task.task_id, "completed")
+                if versioned:
+                    emit_v1("task.completed", {"usage": usage})
         except BrokenPipeError:
             if runtime_session:
                 runtime_session.terminate()
@@ -401,7 +487,16 @@ class Handler(SimpleHTTPRequestHandler):
         except OSError as error:
             TASKS.finish(task.task_id, "failed")
             try:
-                emit({"type": "error", "message": f"无法启动 Codex：{error}"})
+                if versioned:
+                    emit_v1(
+                        "task.failed",
+                        {
+                            "code": "runtime.unavailable",
+                            "message": f"无法启动 Codex：{error}",
+                        },
+                    )
+                else:
+                    emit({"type": "error", "message": f"无法启动 Codex：{error}"})
             except BrokenPipeError:
                 pass
         finally:
