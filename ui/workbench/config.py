@@ -23,8 +23,24 @@ class WorkbenchConfig:
     codex_bin: str
     codex_model: str
     max_sandbox: str
+    max_concurrent_tasks: int
+    task_timeout_seconds: int
     max_request_bytes: int = 256 * 1024
     max_message_chars: int = 100_000
+
+
+def _bounded_int(
+    values: Mapping[str, str],
+    name: str,
+    default: int,
+    minimum: int,
+    maximum: int,
+) -> int:
+    try:
+        value = int(values.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(value, maximum))
 
 
 def load_config(
@@ -50,5 +66,18 @@ def load_config(
         codex_bin=values.get("CLAUDE_SEO_CODEX_BIN") or shutil.which("codex") or "codex",
         codex_model=values.get("CLAUDE_SEO_CODEX_MODEL", "gpt-5.4"),
         max_sandbox=max_sandbox,
+        max_concurrent_tasks=_bounded_int(
+            values,
+            "CLAUDE_SEO_MAX_CONCURRENT_TASKS",
+            1,
+            1,
+            4,
+        ),
+        task_timeout_seconds=_bounded_int(
+            values,
+            "CLAUDE_SEO_TASK_TIMEOUT_SECONDS",
+            900,
+            30,
+            3600,
+        ),
     )
-

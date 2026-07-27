@@ -18,6 +18,7 @@ class ErrorCode:
     TASK_NOT_FOUND = "task.not_found"
     TASK_NOT_CANCELLABLE = "task.not_cancellable"
     TASK_CAPACITY = "task.capacity_exceeded"
+    TASK_TIMEOUT = "task.timeout"
 
 
 def error_payload(

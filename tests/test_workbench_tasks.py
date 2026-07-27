@@ -71,11 +71,33 @@ class TaskManagerTests(unittest.TestCase):
             manager.cancel(record.task_id)
 
     def test_capacity_rejects_new_active_task(self):
-        manager = TaskManager(max_records=1)
+        manager = TaskManager(max_records=10, max_active=1)
         manager.create()
 
         with self.assertRaises(TaskCapacityError):
             manager.create()
+
+    def test_terminal_task_releases_active_capacity(self):
+        manager = TaskManager(max_records=10, max_active=1)
+        first = manager.create()
+        manager.finish(first.task_id, "completed")
+
+        second = manager.create()
+
+        self.assertEqual(second.status, "starting")
+
+    def test_timeout_terminates_session_and_wins_terminal_status(self):
+        manager = TaskManager()
+        record = manager.create()
+        session = FakeSession()
+        manager.bind_session(record.task_id, session)
+
+        snapshot = manager.request_timeout(record.task_id)
+
+        self.assertEqual(snapshot["status"], "timeout_requested")
+        self.assertTrue(session.terminated)
+        self.assertTrue(manager.is_timeout_requested(record.task_id))
+        self.assertEqual(manager.finish(record.task_id, "failed")["status"], "timed_out")
 
 
 if __name__ == "__main__":

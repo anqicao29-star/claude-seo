@@ -29,6 +29,8 @@ class ConfigTests(unittest.TestCase):
                 "CLAUDE_SEO_CODEX_BIN": "/opt/codex",
                 "CLAUDE_SEO_CODEX_MODEL": "test-model",
                 "CLAUDE_SEO_MAX_SANDBOX": "workspace-write",
+                "CLAUDE_SEO_MAX_CONCURRENT_TASKS": "3",
+                "CLAUDE_SEO_TASK_TIMEOUT_SECONDS": "120",
             },
         )
 
@@ -37,6 +39,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.codex_bin, "/opt/codex")
         self.assertEqual(config.codex_model, "test-model")
         self.assertEqual(config.max_sandbox, "workspace-write")
+        self.assertEqual(config.max_concurrent_tasks, 3)
+        self.assertEqual(config.task_timeout_seconds, 120)
 
     def test_invalid_sandbox_configuration_fails_closed(self):
         config = load_config(
@@ -45,6 +49,27 @@ class ConfigTests(unittest.TestCase):
         )
 
         self.assertEqual(config.max_sandbox, "read-only")
+
+    def test_resource_limits_are_bounded_and_invalid_values_use_defaults(self):
+        bounded = load_config(
+            REPO_ROOT / "ui" / "server.py",
+            {
+                "CLAUDE_SEO_MAX_CONCURRENT_TASKS": "99",
+                "CLAUDE_SEO_TASK_TIMEOUT_SECONDS": "1",
+            },
+        )
+        invalid = load_config(
+            REPO_ROOT / "ui" / "server.py",
+            {
+                "CLAUDE_SEO_MAX_CONCURRENT_TASKS": "many",
+                "CLAUDE_SEO_TASK_TIMEOUT_SECONDS": "later",
+            },
+        )
+
+        self.assertEqual(bounded.max_concurrent_tasks, 4)
+        self.assertEqual(bounded.task_timeout_seconds, 30)
+        self.assertEqual(invalid.max_concurrent_tasks, 1)
+        self.assertEqual(invalid.task_timeout_seconds, 900)
 
 
 class ErrorTests(unittest.TestCase):

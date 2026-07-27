@@ -12,6 +12,7 @@ import os
 import re
 import sqlite3
 import sys
+import threading
 import uuid
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -44,8 +45,10 @@ CODEX_MODEL = CONFIG.codex_model
 MAX_SANDBOX = CONFIG.max_sandbox
 MAX_REQUEST_BYTES = CONFIG.max_request_bytes
 MAX_MESSAGE_CHARS = CONFIG.max_message_chars
+MAX_CONCURRENT_TASKS = CONFIG.max_concurrent_tasks
+TASK_TIMEOUT_SECONDS = CONFIG.task_timeout_seconds
 RUNTIME = CodexCliRuntime(CODEX_BIN, CODEX_MODEL, PROJECT_DIR)
-TASKS = TaskManager()
+TASKS = TaskManager(max_active=MAX_CONCURRENT_TASKS)
 SESSIONS = SessionManager()
 LOCAL_HOST_PATTERN = re.compile(r"\A(?:127\.0\.0\.1|localhost)(?::\d{1,5})?\Z", re.IGNORECASE)
 TASK_CANCEL_PATTERN = re.compile(r"\A/api/tasks/(task_[0-9a-f]{32})/cancel\Z")
@@ -178,6 +181,8 @@ def api_runtime():
         "model": status.model,
         "workspace": str(PROJECT_DIR),
         "max_sandbox": MAX_SANDBOX,
+        "max_concurrent_tasks": MAX_CONCURRENT_TASKS,
+        "task_timeout_seconds": TASK_TIMEOUT_SECONDS,
     }
 
 
@@ -380,6 +385,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.close_connection = True
 
         runtime_session = None
+        timeout_timer = None
         protocol_stream = EventStream(task.task_id) if versioned else None
 
         def emit(event):
@@ -417,6 +423,16 @@ class Handler(SimpleHTTPRequestHandler):
             )
             TASKS.bind_session(task.task_id, runtime_session)
 
+            def request_timeout():
+                try:
+                    TASKS.request_timeout(task.task_id)
+                except (TaskNotFoundError, TaskNotCancellableError):
+                    pass
+
+            timeout_timer = threading.Timer(TASK_TIMEOUT_SECONDS, request_timeout)
+            timeout_timer.daemon = True
+            timeout_timer.start()
+
             emitted_error = False
             failure_message = ""
             usage = {}
@@ -451,7 +467,17 @@ class Handler(SimpleHTTPRequestHandler):
                 emit(client_event)
 
             return_code = runtime_session.wait()
-            if TASKS.is_cancel_requested(task.task_id):
+            if TASKS.is_timeout_requested(task.task_id):
+                TASKS.finish(task.task_id, "timed_out")
+                message = f"任务运行超过 {TASK_TIMEOUT_SECONDS} 秒，已自动停止"
+                if versioned:
+                    emit_v1(
+                        "task.failed",
+                        {"code": ErrorCode.TASK_TIMEOUT, "message": message},
+                    )
+                else:
+                    emit({"type": "error", "message": message})
+            elif TASKS.is_cancel_requested(task.task_id):
                 TASKS.finish(task.task_id, "cancelled")
                 if versioned:
                     emit_v1("task.cancelled", {"reason": "user_requested"})
@@ -500,6 +526,8 @@ class Handler(SimpleHTTPRequestHandler):
             except BrokenPipeError:
                 pass
         finally:
+            if timeout_timer:
+                timeout_timer.cancel()
             if runtime_session:
                 runtime_session.terminate()
 

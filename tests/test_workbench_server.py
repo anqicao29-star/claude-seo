@@ -118,6 +118,11 @@ class WorkbenchFunctionTests(unittest.TestCase):
         self.assertEqual(result["login_status"], "Logged in using ChatGPT")
         self.assertEqual(result["max_sandbox"], server.MAX_SANDBOX)
         self.assertEqual(result["model"], "test-model")
+        self.assertEqual(
+            result["max_concurrent_tasks"],
+            server.MAX_CONCURRENT_TASKS,
+        )
+        self.assertEqual(result["task_timeout_seconds"], server.TASK_TIMEOUT_SECONDS)
 
 
 class WorkbenchHttpTests(unittest.TestCase):
@@ -507,6 +512,51 @@ class WorkbenchHttpTests(unittest.TestCase):
         )
         self.assertEqual(self.task_manager.get(task_id).status, "cancelled")
         self.assertTrue(session.terminated)
+
+    def test_v1_chat_times_out_and_terminates_runtime(self):
+        session = BlockingRuntimeSession()
+        runtime = FakeRuntime(session=session)
+
+        with patch.object(server, "RUNTIME", runtime):
+            with patch.object(server, "TASK_TIMEOUT_SECONDS", 0.05):
+                status, headers, body = self.post_v1({"message": "stuck task"})
+
+        self.assertEqual(status, 200)
+        task_id = headers["X-Task-ID"]
+        events = [json.loads(line) for line in body.decode("utf-8").splitlines()]
+        self.assertEqual(events[-1]["type"], "task.failed")
+        self.assertEqual(events[-1]["data"]["code"], server.ErrorCode.TASK_TIMEOUT)
+        self.assertIn("已自动停止", events[-1]["data"]["message"])
+        self.assertEqual(self.task_manager.get(task_id).status, "timed_out")
+        self.assertTrue(session.terminated)
+
+    def test_second_active_chat_is_rejected_until_first_finishes(self):
+        session = BlockingRuntimeSession()
+        runtime = FakeRuntime(session=session)
+        first_result = {}
+
+        def run_first_chat():
+            first_result["response"] = self.post_v1({"message": "first"})
+
+        with patch.object(server, "RUNTIME", runtime):
+            worker = threading.Thread(target=run_first_chat)
+            worker.start()
+            self.assertTrue(runtime.started.wait(timeout=1))
+            status, _, body = self.post_v1({"message": "second"})
+            task_id = self.task_manager.snapshots()[0]["task_id"]
+            self.request(
+                "POST",
+                f"/api/tasks/{task_id}/cancel",
+                body=b"{}",
+                headers={"Content-Type": "application/json"},
+            )
+            worker.join(timeout=3)
+
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(status, 429)
+        error = json.loads(body)["error"]
+        self.assertEqual(error["code"], server.ErrorCode.TASK_CAPACITY)
+        self.assertTrue(error["retryable"])
 
     def test_cancel_endpoint_rejects_unknown_and_terminal_tasks(self):
         unknown_id = "task_" + ("0" * 32)

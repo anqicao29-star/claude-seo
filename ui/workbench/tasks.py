@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 from .runtime import RuntimeSession
 
 
-TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
+TERMINAL_STATUSES = {"completed", "failed", "cancelled", "timed_out"}
 
 
 def utc_timestamp() -> str:
@@ -48,8 +48,9 @@ class TaskRecord:
 
 
 class TaskManager:
-    def __init__(self, max_records: int = 100):
+    def __init__(self, max_records: int = 100, max_active: int = 1):
         self.max_records = max_records
+        self.max_active = max_active
         self._records: Dict[str, TaskRecord] = {}
         self._lock = threading.RLock()
 
@@ -67,6 +68,12 @@ class TaskManager:
     def create(self) -> TaskRecord:
         with self._lock:
             self._trim_terminal_records()
+            active_count = sum(
+                record.status not in TERMINAL_STATUSES
+                for record in self._records.values()
+            )
+            if active_count >= self.max_active:
+                raise TaskCapacityError("active task limit reached")
             if len(self._records) >= self.max_records:
                 raise TaskCapacityError("task registry is full")
             now = utc_timestamp()
@@ -107,8 +114,25 @@ class TaskManager:
             record = self.get(task_id)
             if record.status in TERMINAL_STATUSES:
                 raise TaskNotCancellableError(record.status)
+            if record.status == "timeout_requested":
+                raise TaskNotCancellableError(record.status)
             if record.status != "cancel_requested":
                 record.status = "cancel_requested"
+                record.updated_at = utc_timestamp()
+            session = record.runtime_session
+            snapshot = record.snapshot()
+        if session is not None:
+            session.terminate()
+        return snapshot
+
+    def request_timeout(self, task_id: str) -> Dict[str, Any]:
+        session = None
+        with self._lock:
+            record = self.get(task_id)
+            if record.status in TERMINAL_STATUSES:
+                raise TaskNotCancellableError(record.status)
+            if record.status != "cancel_requested":
+                record.status = "timeout_requested"
                 record.updated_at = utc_timestamp()
             session = record.runtime_session
             snapshot = record.snapshot()
@@ -123,6 +147,8 @@ class TaskManager:
             record = self.get(task_id)
             if record.status == "cancel_requested":
                 status = "cancelled"
+            elif record.status == "timeout_requested":
+                status = "timed_out"
             record.status = status
             record.runtime_session = None
             record.updated_at = utc_timestamp()
@@ -131,6 +157,10 @@ class TaskManager:
     def is_cancel_requested(self, task_id: str) -> bool:
         with self._lock:
             return self.get(task_id).status == "cancel_requested"
+
+    def is_timeout_requested(self, task_id: str) -> bool:
+        with self._lock:
+            return self.get(task_id).status == "timeout_requested"
 
     def snapshots(self):
         with self._lock:
