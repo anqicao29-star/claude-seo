@@ -58,6 +58,17 @@ class SessionManagerTests(unittest.TestCase):
         self.assertIsNone(manager.runtime_thread_id(first.session_id))
         self.assertEqual(manager.snapshot(second.session_id)["session_id"], second.session_id)
 
+    def test_switching_runtime_creates_a_new_application_session(self):
+        manager = SessionManager()
+        codex = manager.get_or_create(runtime_name="codex")
+        manager.bind_runtime_thread(codex.session_id, "codex-private")
+
+        claude = manager.get_or_create(codex.session_id, runtime_name="claude")
+
+        self.assertNotEqual(claude.session_id, codex.session_id)
+        self.assertEqual(claude.runtime_name, "claude")
+        self.assertEqual(claude.runtime_thread_id, "")
+
 
 if __name__ == "__main__":
     unittest.main()

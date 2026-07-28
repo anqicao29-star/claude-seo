@@ -110,7 +110,7 @@ class CodexCliSession(RuntimeSession):
         if self.process.poll() is not None:
             return
         pid = getattr(self.process, "pid", None)
-        if pid is not None:
+        if pid is not None and hasattr(os, "killpg") and hasattr(os, "getpgid"):
             try:
                 os.killpg(os.getpgid(pid), signal.SIGTERM)
                 return
@@ -203,4 +203,3 @@ class CodexCliRuntime(RuntimeAdapter):
             if process.poll() is None:
                 process.terminate()
             raise
-

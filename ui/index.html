@@ -119,9 +119,9 @@
   <header class="topbar">
     <div class="brand">
       <div class="logo">SEO</div>
-      <div><h1>Claude SEO AI 工作台</h1><p>直接描述目标，Codex 会读取技能并完成任务</p></div>
+      <div><h1>Claude SEO AI 工作台</h1><p>SEO 与文件任务走 Codex，文章创作走 Claude</p></div>
     </div>
-    <div class="runtime" id="runtime"><i class="dot"></i><span>正在检测 Codex…</span></div>
+    <div class="runtime" id="runtime"><i class="dot"></i><span>正在检测 Codex 和 Claude…</span></div>
   </header>
 
   <main class="layout">
@@ -129,20 +129,24 @@
       <div class="side-head"><strong>专业技能</strong><button class="new-chat" id="newChat">＋ 新对话</button></div>
       <input class="search" id="skillSearch" placeholder="搜索技能…">
       <div class="skill-list" id="skillList"></div>
-      <div class="side-note">不选择技能时，Codex 会根据你的目标自动决定工作流。选择技能只代表优先使用，不会限制必要工具。</div>
+      <div class="side-note">不选择技能时，AI 会根据你的目标自动决定工作流。选择技能只代表优先使用，不会限制必要工具。</div>
     </aside>
 
     <section class="chat">
       <div class="chat-head">
         <div class="chat-title"><strong id="chatTitle">自由对话</strong><span id="threadLabel">新会话</span></div>
         <div class="controls">
+          <select id="taskType" title="文章创作固定使用 Claude">
+            <option value="general">SEO/文件任务 · Codex</option>
+            <option value="article">文章创作 · Claude</option>
+          </select>
           <select id="concurrency" title="允许多个独立窗口或会话同时运行任务">
             <option value="1">并发 1 个任务</option>
             <option value="2">并发 2 个任务</option>
             <option value="3">并发 3 个任务</option>
             <option value="4">并发 4 个任务</option>
           </select>
-          <select id="sandbox" title="Codex 文件权限">
+          <select id="sandbox" title="AI 文件权限">
             <option value="read-only">只读分析</option>
             <option value="workspace-write">允许修改项目文件</option>
           </select>
@@ -155,16 +159,16 @@
           <h2>你想完成什么？</h2>
           <p>不用先研究技能菜单。直接描述网站、文章、目标和要求，AI 会选择合适的 SEO 工作流并执行。</p>
           <div class="starters">
-            <button class="starter" data-prompt="帮我对这个网站做一次完整的 SEO 审计，并按优先级给出可执行的修改建议：">
+            <button class="starter" data-task-type="general" data-prompt="帮我对这个网站做一次完整的 SEO 审计，并按优先级给出可执行的修改建议：">
               <strong>完整 SEO 审计</strong><span>分析网站并输出优先级清单</span>
             </button>
-            <button class="starter" data-prompt="检查项目中的文章，找出 SEO、可读性和 E-E-A-T 问题。先分析，不要修改文件。">
+            <button class="starter" data-task-type="general" data-prompt="检查项目中的文章，找出 SEO、可读性和 E-E-A-T 问题。先分析，不要修改文件。">
               <strong>检查本地文章</strong><span>读取项目内容并给出建议</span>
             </button>
-            <button class="starter" data-prompt="请优化项目中的文章内容。先说明准备修改哪些文件和原因，确认范围后再修改。">
-              <strong>优化文章内容</strong><span>先确认范围，再修改项目文件</span>
+            <button class="starter" data-task-type="article" data-prompt="请根据我的要求创作一篇可直接发布的完整文章：">
+              <strong>创作完整文章</strong><span>由 Claude 输出可交付的正文</span>
             </button>
-            <button class="starter" data-prompt="围绕这个主题制定关键词和内容集群计划：">
+            <button class="starter" data-task-type="general" data-prompt="围绕这个主题制定关键词和内容集群计划：">
               <strong>关键词与内容规划</strong><span>构建主题集群和执行路线</span>
             </button>
           </div>
@@ -190,7 +194,8 @@ const $ = selector => document.querySelector(selector);
 const state = {
   skills: [], selectedSkill: "", sessionId: localStorage.getItem("claudeSeoSession") || "",
   running: false, messages: JSON.parse(localStorage.getItem("claudeSeoMessages") || "[]"),
-  activeTaskId: "", maxConcurrentTasks: 2
+  activeTaskId: "", maxConcurrentTasks: 1,
+  taskType: localStorage.getItem("claudeSeoTaskType") || "general", runtimeStatus: {}
 };
 
 function escapeHtml(value) {
@@ -211,16 +216,48 @@ function saveConversation() {
 }
 
 function setRuntime(runtime) {
-  const ok = runtime.codex_available && runtime.logged_in;
-  $("#runtime").innerHTML = `<i class="dot ${ok ? "ok" : "bad"}"></i><span>${escapeHtml(ok ? `${runtime.codex_version} · ${runtime.model}` : runtime.login_status)}</span>`;
-  if (!ok) $("#prompt").placeholder = "Codex 尚未登录，请先在终端运行 codex login";
+  state.runtimeStatus = runtime;
+  const codexOk = runtime.codex_available && runtime.logged_in;
+  const claudeOk = runtime.claude_available && runtime.claude_logged_in;
+  const ok = codexOk && claudeOk;
+  const codexText = codexOk ? "Codex 已登录" : "Codex 未登录";
+  const claudeText = claudeOk ? "Claude 已登录" : "Claude 未登录";
+  $("#runtime").innerHTML = `<i class="dot ${ok ? "ok" : "bad"}"></i><span>${codexText} · ${claudeText}</span>`;
   const writeOption = $("#sandbox").querySelector('option[value="workspace-write"]');
   const writeEnabled = runtime.max_sandbox === "workspace-write";
   writeOption.disabled = !writeEnabled;
   writeOption.textContent = writeEnabled ? "允许修改项目文件" : "允许修改项目文件（服务未启用）";
   if (!writeEnabled && $("#sandbox").value === "workspace-write") $("#sandbox").value = "read-only";
-  state.maxConcurrentTasks = runtime.max_concurrent_tasks || 2;
+  state.maxConcurrentTasks = runtime.max_concurrent_tasks || 1;
   $("#concurrency").value = String(state.maxConcurrentTasks);
+  $("#taskType").value = state.taskType;
+  updateProviderHint();
+}
+
+function providerName() {
+  return state.taskType === "article" ? "Claude" : "Codex";
+}
+
+function providerLoginCommand() {
+  return state.taskType === "article" ? "claude auth login" : "codex login";
+}
+
+function providerReady() {
+  const runtime = state.runtimeStatus;
+  return state.taskType === "article"
+    ? runtime.claude_available && runtime.claude_logged_in
+    : runtime.codex_available && runtime.logged_in;
+}
+
+function updateProviderHint() {
+  const provider = providerName();
+  if (!providerReady()) {
+    $("#prompt").placeholder = `${provider} 尚未登录，请先在终端运行 ${providerLoginCommand()}`;
+  } else if (state.taskType === "article") {
+    $("#prompt").placeholder = "描述主题、受众、关键词、篇幅和语言，Claude 会输出完整文章…";
+  } else {
+    $("#prompt").placeholder = "描述 SEO、网站或本地文件任务，Codex 会直接执行…";
+  }
 }
 
 async function updateConcurrency(value, persist = true) {
@@ -259,7 +296,7 @@ function renderSkills() {
 function updateContext() {
   const skill = state.selectedSkill ? `优先使用 ${state.selectedSkill}` : "自动选择 SEO 技能";
   const permission = $("#sandbox").value === "workspace-write" ? "允许修改项目文件" : "当前仅分析，不修改文件";
-  $("#context").textContent = `${skill} · ${permission} · 最多 ${state.maxConcurrentTasks} 个并行任务`;
+  $("#context").textContent = `${providerName()} 执行 · ${skill} · ${permission} · 最多 ${state.maxConcurrentTasks} 个并行任务`;
   $("#threadLabel").textContent = state.sessionId ? `会话 ${state.sessionId.slice(8, 16)}…` : "新会话";
 }
 
@@ -272,7 +309,7 @@ function renderMessages() {
   container.innerHTML = state.messages.map(message => `
     <div class="message ${message.role}">
       <div class="avatar">${message.role === "user" ? "你" : "AI"}</div>
-      <div><div class="who">${message.role === "user" ? "你" : "Codex"}</div>
+      <div><div class="who">${message.role === "user" ? "你" : escapeHtml(message.provider || "AI")}</div>
         <div class="bubble ${message.error ? "error" : ""}">${escapeHtml(message.text)}</div>
       </div>
     </div>`).join("");
@@ -284,10 +321,10 @@ function addMessage(role, text, extra = {}) {
   saveConversation(); renderMessages();
 }
 
-function createPending() {
+function createPending(provider) {
   const wrapper = document.createElement("div");
   wrapper.className = "message assistant";
-  wrapper.innerHTML = `<div class="avatar">AI</div><div><div class="who">Codex</div>
+  wrapper.innerHTML = `<div class="avatar">AI</div><div><div class="who">${escapeHtml(provider)}</div>
     <div class="bubble pending"><span class="pending-text">正在理解任务</span><span class="thinking"><i></i><i></i><i></i></span></div>
     <div class="activity"></div><div class="warning"></div></div>`;
   $("#messages").appendChild(wrapper);
@@ -321,7 +358,7 @@ function handleEvent(event, pending, result) {
     if (pending.querySelectorAll(".activity div").length > 8) pending.querySelector(".activity div").remove();
     $("#messages").scrollTop = $("#messages").scrollHeight;
   } else if (event.type === "assistant") {
-    result.text = event.text;
+    result.text = result.text ? `${result.text}\n\n${event.text}` : event.text;
   } else if (event.type === "warning") {
     pending.querySelector(".warning").textContent = event.message;
   } else if (event.type === "error") {
@@ -354,19 +391,31 @@ async function sendMessage(prefill) {
   if (typeof prefill === "string") $("#prompt").value = prefill;
   const message = $("#prompt").value.trim();
   if (!message) return;
+  if (!providerReady()) {
+    const provider = providerName();
+    addMessage("assistant", `${provider} 尚未登录。请先在终端运行 \`${providerLoginCommand()}\`，完成登录后刷新页面。`, {error: true, provider});
+    return;
+  }
 
+  const provider = providerName();
   state.running = true;
   $("#send").disabled = true;
   $("#prompt").disabled = true;
   addMessage("user", message);
   $("#prompt").value = "";
-  const pending = createPending();
+  const pending = createPending(provider);
   const result = {text: "", error: "", cancelled: false};
 
   try {
     const response = await fetch("/api/v1/chat", {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({message, session_id: state.sessionId, skill: state.selectedSkill, sandbox: $("#sandbox").value})
+      body: JSON.stringify({
+        message,
+        session_id: state.sessionId,
+        skill: state.selectedSkill,
+        sandbox: $("#sandbox").value,
+        task_type: state.taskType
+      })
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -393,7 +442,11 @@ async function sendMessage(prefill) {
     result.error = error.message;
   } finally {
     pending.remove();
-    addMessage("assistant", result.cancelled ? "任务已取消。" : (result.error || result.text || "任务已结束，但 Codex 没有返回文字结果。"), {error: Boolean(result.error)});
+    addMessage(
+      "assistant",
+      result.cancelled ? "任务已取消。" : (result.error || result.text || `任务已结束，但 ${provider} 没有返回文字结果。`),
+      {error: Boolean(result.error), provider}
+    );
     state.running = false;
     state.activeTaskId = "";
     $("#send").disabled = false;
@@ -410,7 +463,36 @@ function newConversation() {
   location.reload();
 }
 
+function switchTaskType(nextType) {
+  if (nextType === state.taskType) return true;
+  if (state.running) {
+    $("#taskType").value = state.taskType;
+    return false;
+  }
+  if (state.messages.length && !confirm("切换模型会开始一个新会话，确定继续吗？")) {
+    $("#taskType").value = state.taskType;
+    return false;
+  }
+  state.taskType = nextType;
+  state.sessionId = "";
+  state.messages = [];
+  state.selectedSkill = "";
+  localStorage.setItem("claudeSeoTaskType", state.taskType);
+  saveConversation();
+  renderMessages();
+  renderSkills();
+  updateProviderHint();
+  updateContext();
+  return true;
+}
+
 async function init() {
+  if (location.protocol === "file:") {
+    $("#runtime").innerHTML = `<i class="dot bad"></i><span>打开方式不正确：请运行启动器后访问 localhost</span>`;
+    $("#prompt").disabled = true;
+    $("#send").disabled = true;
+    return;
+  }
   try {
     const [runtime, skills] = await Promise.all([getJson("/api/runtime"), getJson("/api/skills")]);
     setRuntime(runtime); state.skills = skills.skills; renderSkills();
@@ -425,6 +507,7 @@ async function init() {
   if (state.messages.length) renderMessages();
   $("#skillSearch").addEventListener("input", renderSkills);
   $("#sandbox").addEventListener("change", updateContext);
+  $("#taskType").addEventListener("change", event => switchTaskType(event.target.value));
   $("#concurrency").addEventListener("change", async event => {
     const previous = state.maxConcurrentTasks;
     try {
@@ -445,6 +528,7 @@ async function init() {
     event.target.style.height = Math.min(event.target.scrollHeight, 180) + "px";
   });
   document.querySelectorAll(".starter").forEach(button => button.onclick = () => {
+    switchTaskType(button.dataset.taskType || "general");
     $("#prompt").value = button.dataset.prompt; $("#prompt").focus();
   });
 }

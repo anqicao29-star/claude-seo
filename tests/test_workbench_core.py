@@ -28,6 +28,8 @@ class ConfigTests(unittest.TestCase):
             {
                 "CLAUDE_SEO_CODEX_BIN": "/opt/codex",
                 "CLAUDE_SEO_CODEX_MODEL": "test-model",
+                "CLAUDE_SEO_CLAUDE_BIN": "/opt/claude",
+                "CLAUDE_SEO_CLAUDE_MODEL": "test-claude",
                 "CLAUDE_SEO_MAX_SANDBOX": "workspace-write",
                 "CLAUDE_SEO_MAX_CONCURRENT_TASKS": "3",
                 "CLAUDE_SEO_TASK_TIMEOUT_SECONDS": "120",
@@ -36,8 +38,12 @@ class ConfigTests(unittest.TestCase):
 
         self.assertEqual(config.project_dir, REPO_ROOT)
         self.assertEqual(config.ui_dir, UI_DIR)
+        self.assertEqual(config.skills_dir, REPO_ROOT / "skills")
+        self.assertEqual(config.agents_dir, REPO_ROOT / "agents")
         self.assertEqual(config.codex_bin, "/opt/codex")
         self.assertEqual(config.codex_model, "test-model")
+        self.assertEqual(config.claude_bin, "/opt/claude")
+        self.assertEqual(config.claude_model, "test-claude")
         self.assertEqual(config.max_sandbox, "workspace-write")
         self.assertEqual(config.max_concurrent_tasks, 3)
         self.assertEqual(config.task_timeout_seconds, 120)
@@ -68,7 +74,7 @@ class ConfigTests(unittest.TestCase):
 
         self.assertEqual(bounded.max_concurrent_tasks, 4)
         self.assertEqual(bounded.task_timeout_seconds, 30)
-        self.assertEqual(invalid.max_concurrent_tasks, 2)
+        self.assertEqual(invalid.max_concurrent_tasks, 1)
         self.assertEqual(invalid.task_timeout_seconds, 900)
 
 

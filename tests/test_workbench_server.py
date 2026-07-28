@@ -109,7 +109,19 @@ class WorkbenchFunctionTests(unittest.TestCase):
                 model="test-model",
             )
         )
-        with patch.object(server, "RUNTIME", runtime):
+        claude_runtime = FakeRuntime(
+            status=RuntimeStatus(
+                available=True,
+                version="2.1.199 (Claude Code)",
+                authenticated=True,
+                authentication_status="已登录",
+                model="sonnet",
+            )
+        )
+        with (
+            patch.object(server, "RUNTIME", runtime),
+            patch.object(server, "CLAUDE_RUNTIME", claude_runtime),
+        ):
             result = server.api_runtime()
 
         self.assertTrue(result["codex_available"])
@@ -118,6 +130,10 @@ class WorkbenchFunctionTests(unittest.TestCase):
         self.assertEqual(result["login_status"], "Logged in using ChatGPT")
         self.assertEqual(result["max_sandbox"], server.MAX_SANDBOX)
         self.assertEqual(result["model"], "test-model")
+        self.assertTrue(result["claude_available"])
+        self.assertTrue(result["claude_logged_in"])
+        self.assertEqual(result["claude_model"], "sonnet")
+        self.assertEqual(result["routing"]["article"], "claude")
         self.assertEqual(
             result["max_concurrent_tasks"],
             server.MAX_CONCURRENT_TASKS,
@@ -308,6 +324,11 @@ class WorkbenchHttpTests(unittest.TestCase):
                 server.ErrorCode.SKILL_NOT_FOUND,
                 "选择的技能不存在",
             ),
+            (
+                {"message": "test", "task_type": "video"},
+                server.ErrorCode.INVALID_FIELD,
+                "不支持的任务类型",
+            ),
         ]
 
         for payload, code, message in cases:
@@ -382,6 +403,41 @@ class WorkbenchHttpTests(unittest.TestCase):
             "codex-thread-private",
         )
         self.assertEqual(runtime.request.thread_id, "")
+
+    def test_article_task_is_routed_to_claude(self):
+        claude_runtime = FakeRuntime(
+            session=FakeRuntimeSession(
+                events=[
+                    RuntimeEvent("thread", {"thread_id": "claude-private"}),
+                    RuntimeEvent("assistant", {"text": "# 完整文章"}),
+                    RuntimeEvent("completed", {"usage": {"tokens": 8}}),
+                ]
+            )
+        )
+
+        with patch.object(server, "CLAUDE_RUNTIME", claude_runtime):
+            status, headers, body = self.post_v1(
+                {
+                    "message": "写一篇文章",
+                    "task_type": "article",
+                    "sandbox": "read-only",
+                }
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["X-AI-Runtime"], "claude")
+        self.assertIn("# 完整文章", body.decode("utf-8"))
+        self.assertIn("真正完成用户要求的文章", claude_runtime.request.prompt)
+        self.assertEqual(claude_runtime.request.thread_id, "")
+        session_id = headers["X-Session-ID"]
+        self.assertEqual(
+            self.session_manager.runtime_thread_id(session_id),
+            "claude-private",
+        )
+        self.assertEqual(
+            self.session_manager.snapshot(session_id)["runtime"],
+            "claude",
+        )
 
     def test_v1_chat_resumes_using_private_runtime_mapping(self):
         session = self.session_manager.get_or_create()

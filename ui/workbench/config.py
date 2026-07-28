@@ -22,6 +22,8 @@ class WorkbenchConfig:
     drift_db: Path
     codex_bin: str
     codex_model: str
+    claude_bin: str
+    claude_model: str
     max_sandbox: str
     max_concurrent_tasks: int
     task_timeout_seconds: int
@@ -60,16 +62,18 @@ def load_config(
         home=home,
         project_dir=project_dir,
         ui_dir=ui_dir,
-        skills_dir=home / ".claude" / "skills",
-        agents_dir=home / ".claude" / "agents",
+        skills_dir=Path(values.get("CLAUDE_SEO_SKILLS_DIR", str(project_dir / "skills"))),
+        agents_dir=Path(values.get("CLAUDE_SEO_AGENTS_DIR", str(project_dir / "agents"))),
         drift_db=home / ".cache" / "claude-seo" / "drift" / "baselines.db",
         codex_bin=values.get("CLAUDE_SEO_CODEX_BIN") or shutil.which("codex") or "codex",
         codex_model=values.get("CLAUDE_SEO_CODEX_MODEL", "gpt-5.4"),
+        claude_bin=values.get("CLAUDE_SEO_CLAUDE_BIN") or shutil.which("claude") or "claude",
+        claude_model=values.get("CLAUDE_SEO_CLAUDE_MODEL", "sonnet"),
         max_sandbox=max_sandbox,
         max_concurrent_tasks=_bounded_int(
             values,
             "CLAUDE_SEO_MAX_CONCURRENT_TASKS",
-            2,
+            1,
             1,
             4,
         ),

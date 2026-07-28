@@ -17,6 +17,7 @@ def utc_timestamp() -> str:
 class SessionRecord:
     session_id: str
     runtime_thread_id: str
+    runtime_name: str
     created_at: str
     updated_at: str
 
@@ -26,6 +27,7 @@ class SessionRecord:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "runtime_bound": bool(self.runtime_thread_id),
+            "runtime": self.runtime_name,
         }
 
 
@@ -40,17 +42,29 @@ class SessionManager:
             oldest = min(self._records.values(), key=lambda record: record.updated_at)
             self._records.pop(oldest.session_id, None)
 
-    def get_or_create(self, session_id: str = "") -> SessionRecord:
+    def get_or_create(
+        self,
+        session_id: str = "",
+        runtime_name: str = "",
+    ) -> SessionRecord:
         with self._lock:
             if session_id and session_id in self._records:
                 record = self._records[session_id]
-                record.updated_at = utc_timestamp()
-                return record
+                if not runtime_name or not record.runtime_name or record.runtime_name == runtime_name:
+                    if runtime_name and not record.runtime_name:
+                        record.runtime_name = runtime_name
+                    record.updated_at = utc_timestamp()
+                    return record
             self._trim_oldest()
             now = utc_timestamp()
             record = SessionRecord(
-                session_id=session_id or f"session_{uuid.uuid4().hex}",
+                session_id=(
+                    session_id
+                    if session_id and session_id not in self._records
+                    else f"session_{uuid.uuid4().hex}"
+                ),
                 runtime_thread_id="",
+                runtime_name=runtime_name,
                 created_at=now,
                 updated_at=now,
             )
@@ -72,4 +86,3 @@ class SessionManager:
     def snapshot(self, session_id: str) -> Dict[str, Any]:
         with self._lock:
             return self._records[session_id].snapshot()
-

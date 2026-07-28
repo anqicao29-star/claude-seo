@@ -24,7 +24,7 @@ if str(UI_DIR) not in sys.path:
 from workbench.config import load_config
 from workbench.errors import ErrorCode, error_payload
 from workbench.protocol import EventStream
-from workbench.runtime import CodexCliRuntime, RuntimeRequest
+from workbench.runtime import ClaudeCliRuntime, CodexCliRuntime, RuntimeRequest
 from workbench.sessions import SessionManager
 from workbench.tasks import (
     TaskCapacityError,
@@ -42,6 +42,8 @@ AGENTS_DIR = CONFIG.agents_dir
 DRIFT_DB = CONFIG.drift_db
 CODEX_BIN = CONFIG.codex_bin
 CODEX_MODEL = CONFIG.codex_model
+CLAUDE_BIN = CONFIG.claude_bin
+CLAUDE_MODEL = CONFIG.claude_model
 MAX_SANDBOX = CONFIG.max_sandbox
 MAX_REQUEST_BYTES = CONFIG.max_request_bytes
 MAX_MESSAGE_CHARS = CONFIG.max_message_chars
@@ -49,11 +51,13 @@ MAX_CONCURRENT_TASKS = CONFIG.max_concurrent_tasks
 TASK_TIMEOUT_SECONDS = CONFIG.task_timeout_seconds
 MAX_CONCURRENT_TASKS_LIMIT = 4
 RUNTIME = CodexCliRuntime(CODEX_BIN, CODEX_MODEL, PROJECT_DIR)
+CLAUDE_RUNTIME = ClaudeCliRuntime(CLAUDE_BIN, CLAUDE_MODEL, PROJECT_DIR)
 TASKS = TaskManager(max_active=MAX_CONCURRENT_TASKS)
 SESSIONS = SessionManager()
 LOCAL_HOST_PATTERN = re.compile(r"\A(?:127\.0\.0\.1|localhost)(?::\d{1,5})?\Z", re.IGNORECASE)
 TASK_CANCEL_PATTERN = re.compile(r"\A/api/tasks/(task_[0-9a-f]{32})/cancel\Z")
 SESSION_ID_PATTERN = re.compile(r"\Asession_[0-9a-f]{32}\Z")
+TASK_TYPES = {"general": "codex", "article": "claude"}
 
 CATEGORIES = {
     "编排": ["seo"],
@@ -173,13 +177,23 @@ def api_drift():
 
 
 def api_runtime():
-    status = RUNTIME.status()
+    codex_status = RUNTIME.status()
+    claude_status = CLAUDE_RUNTIME.status()
     return {
-        "codex_available": status.available,
-        "codex_version": status.version,
-        "logged_in": status.authenticated,
-        "login_status": status.authentication_status,
-        "model": status.model,
+        "codex_available": codex_status.available,
+        "codex_version": codex_status.version,
+        "logged_in": codex_status.authenticated,
+        "login_status": codex_status.authentication_status,
+        "model": codex_status.model,
+        "claude_available": claude_status.available,
+        "claude_version": claude_status.version,
+        "claude_logged_in": claude_status.authenticated,
+        "claude_login_status": claude_status.authentication_status,
+        "claude_model": claude_status.model,
+        "routing": {
+            "general": "codex",
+            "article": "claude",
+        },
         "workspace": str(PROJECT_DIR),
         "max_sandbox": MAX_SANDBOX,
         "max_concurrent_tasks": TASKS.get_max_active(),
@@ -197,14 +211,23 @@ ROUTES = {
 }
 
 
-def build_prompt(message, skill, is_new_thread):
+def build_prompt(message, skill, is_new_thread, task_type="general"):
     if not is_new_thread:
         return message
-    guidance = (
-        "你正在 claude-seo 项目根目录中工作。请把用户的自然语言目标当作需要真正完成的任务，"
-        "不要只介绍技能菜单。根据任务自主读取项目中的 AGENTS.md、skills/seo/SKILL.md 和相关技能文件，"
-        "使用适用的脚本与工具；若用户要求修改文件，请先检查目标并只修改任务范围内的内容。"
-    )
+    if task_type == "article":
+        guidance = (
+            "你是本地 Claude SEO 工作台的文章创作引擎。请真正完成用户要求的文章，"
+            "不要把任务转交给 Codex，也不要只给写作建议或提纲。"
+            "根据需要读取项目中的 CLAUDE.md、skills/seo/SKILL.md 和相关内容技能。"
+            "优先输出可直接交付的完整 Markdown 正文；如果用户明确要求保存文件且当前权限允许，"
+            "再写入用户指定的位置。不要读取或输出任何登录凭据。"
+        )
+    else:
+        guidance = (
+            "你正在 claude-seo 项目根目录中工作。请把用户的自然语言目标当作需要真正完成的任务，"
+            "不要只介绍技能菜单。根据任务自主读取项目中的 AGENTS.md、skills/seo/SKILL.md 和相关技能文件，"
+            "使用适用的脚本与工具；若用户要求修改文件，请先检查目标并只修改任务范围内的内容。"
+        )
     if skill:
         guidance += f" 用户选择了 {skill}，请优先读取 skills/{skill}/SKILL.md 并遵循其中的工作流。"
     return f"{guidance}\n\n用户任务：\n{message}"
@@ -374,6 +397,7 @@ class Handler(SimpleHTTPRequestHandler):
         session_id = str(payload.get("session_id", "")).strip()
         skill = str(payload.get("skill", "")).strip()
         sandbox = str(payload.get("sandbox", "read-only"))
+        task_type = str(payload.get("task_type", "general")).strip()
         if not message or len(message) > MAX_MESSAGE_CHARS:
             self.send_api_error(400, ErrorCode.INVALID_FIELD, "请输入有效任务内容")
             return
@@ -393,6 +417,9 @@ class Handler(SimpleHTTPRequestHandler):
         if sandbox not in ("read-only", "workspace-write"):
             self.send_api_error(400, ErrorCode.INVALID_FIELD, "不支持的权限模式")
             return
+        if task_type not in TASK_TYPES:
+            self.send_api_error(400, ErrorCode.INVALID_FIELD, "不支持的任务类型")
+            return
         if sandbox == "workspace-write" and MAX_SANDBOX != "workspace-write":
             self.send_api_error(403, ErrorCode.MODE_DENIED, "服务当前仅允许只读任务")
             return
@@ -401,7 +428,13 @@ class Handler(SimpleHTTPRequestHandler):
             if not re.fullmatch(r"seo(?:-[a-z0-9-]+)?", skill) or not skill_path.is_file():
                 self.send_api_error(400, ErrorCode.SKILL_NOT_FOUND, "选择的技能不存在")
                 return
-        app_session = SESSIONS.get_or_create(session_id) if versioned else None
+        runtime_name = TASK_TYPES[task_type]
+        runtime = CLAUDE_RUNTIME if runtime_name == "claude" else RUNTIME
+        app_session = (
+            SESSIONS.get_or_create(session_id, runtime_name)
+            if versioned
+            else None
+        )
         runtime_thread_id = (
             app_session.runtime_thread_id if app_session is not None else thread_id
         )
@@ -421,6 +454,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache, no-store")
         self.send_header("X-Accel-Buffering", "no")
         self.send_header("X-Task-ID", task.task_id)
+        self.send_header("X-AI-Runtime", runtime_name)
         if versioned:
             self.send_header("X-Protocol-Version", "1")
             self.send_header("X-Session-ID", app_session.session_id)
@@ -454,13 +488,20 @@ class Handler(SimpleHTTPRequestHandler):
                     {
                         "session_id": app_session.session_id,
                         "sandbox": sandbox,
+                        "runtime": runtime_name,
+                        "task_type": task_type,
                     },
                 )
             else:
                 emit({"type": "task", "task_id": task.task_id})
-            runtime_session = RUNTIME.start(
+            runtime_session = runtime.start(
                 RuntimeRequest(
-                    prompt=build_prompt(message, skill, not runtime_thread_id),
+                    prompt=build_prompt(
+                        message,
+                        skill,
+                        not runtime_thread_id,
+                        task_type,
+                    ),
                     thread_id=runtime_thread_id,
                     sandbox=sandbox,
                 )
@@ -530,7 +571,8 @@ class Handler(SimpleHTTPRequestHandler):
             elif return_code != 0 and not emitted_error:
                 detail = runtime_session.stderr_tail()
                 TASKS.finish(task.task_id, "failed")
-                message = detail or f"Codex 退出，状态码 {return_code}"
+                runtime_label = "Claude" if runtime_name == "claude" else "Codex"
+                message = detail or f"{runtime_label} 退出，状态码 {return_code}"
                 if versioned:
                     emit_v1(
                         "task.failed",
@@ -562,11 +604,14 @@ class Handler(SimpleHTTPRequestHandler):
                         "task.failed",
                         {
                             "code": "runtime.unavailable",
-                            "message": f"无法启动 Codex：{error}",
+                            "message": (
+                                f"无法启动 {'Claude' if runtime_name == 'claude' else 'Codex'}：{error}"
+                            ),
                         },
                     )
                 else:
-                    emit({"type": "error", "message": f"无法启动 Codex：{error}"})
+                    runtime_label = "Claude" if runtime_name == "claude" else "Codex"
+                    emit({"type": "error", "message": f"无法启动 {runtime_label}：{error}"})
             except BrokenPipeError:
                 pass
         finally:

@@ -6,6 +6,8 @@
 
 **Claude SEO 是一款面向 [Claude Code](https://claude.ai/claude-code) 的开源 SEO 分析插件。** 它可以并行运行 25 个子技能（sub-skills）和 18 个专项子代理（specialist agents），覆盖技术 SEO、内容质量（E-E-A-T）、Schema.org 结构化数据、AI 搜索优化（GEO）、本地 SEO、电商 SEO 以及国际化 SEO。每次审计都会产出一份带优先级的行动计划，每条建议都有可验证的依据，并参考 Google 的一手指南。
 
+> **本地 AI 工作台：** 本仓库现在附带浏览器工作台。SEO/文件任务使用用户本机已登录的 Codex，文章创作固定使用 Claude Code，并提供 macOS、Linux、Windows 启动器。使用方法见 [README-WORKBENCH.md](README-WORKBENCH.md)。
+
 [![CI](https://github.com/AgriciDaniel/claude-seo/actions/workflows/ci.yml/badge.svg)](https://github.com/AgriciDaniel/claude-seo/actions/workflows/ci.yml)
 [![Claude Code Skill](https://img.shields.io/badge/Claude%20Code-Skill-blue)](https://claude.ai/claude-code)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
