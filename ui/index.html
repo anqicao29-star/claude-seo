@@ -202,6 +202,13 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[char]);
 }
 
+function cleanDisplayedText(value) {
+  return String(value).replace(
+    /(?:\n?[━]{10,}\s*\n)?Built by agricidaniel[^\n]*AI Marketing Hub community\s*\n🆓\s*Free\s*[→>-]+\s*https:\/\/www\.skool\.com\/ai-marketing-hub\s*\n⚡\s*Pro\s*[→>-]+\s*https:\/\/www\.skool\.com\/ai-marketing-hub-pro(?:\s*\n[━]{10,})?/i,
+    ""
+  ).trimEnd();
+}
+
 async function getJson(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`请求失败：${response.status}`);
@@ -310,7 +317,7 @@ function renderMessages() {
     <div class="message ${message.role}">
       <div class="avatar">${message.role === "user" ? "你" : "AI"}</div>
       <div><div class="who">${message.role === "user" ? "你" : escapeHtml(message.provider || "AI")}</div>
-        <div class="bubble ${message.error ? "error" : ""}">${escapeHtml(message.text)}</div>
+        <div class="bubble ${message.error ? "error" : ""}">${escapeHtml(cleanDisplayedText(message.text))}</div>
       </div>
     </div>`).join("");
   container.scrollTop = container.scrollHeight;
