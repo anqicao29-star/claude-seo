@@ -29,11 +29,20 @@ python3 run_workbench.py --check
 - Linux：运行 `./start-workbench.sh`
 - Windows：双击 `start-workbench.bat`
 
-启动器会自动打开：
+启动器会在后台启动服务并自动打开：
 
 `http://localhost:7777`
 
+启动后可以关闭终端窗口，后台服务会继续运行。
+
 不要直接双击 `ui/index.html`。HTML 文件只是界面，脱离本地服务会显示无法连接。
+
+检查或停止后台：
+
+```bash
+python3 run_workbench.py --status
+python3 run_workbench.py --stop
+```
 
 ## 模型分工
 
