@@ -23,6 +23,7 @@ if str(UI_DIR) not in sys.path:
 
 from workbench.config import load_config
 from workbench.errors import ErrorCode, error_payload
+from workbench.auth import ClaudeAuthLauncher
 from workbench.output import clean_assistant_text
 from workbench.protocol import EventStream
 from workbench.runtime import ClaudeCliRuntime, CodexCliRuntime, RuntimeRequest
@@ -53,6 +54,7 @@ TASK_TIMEOUT_SECONDS = CONFIG.task_timeout_seconds
 MAX_CONCURRENT_TASKS_LIMIT = 4
 RUNTIME = CodexCliRuntime(CODEX_BIN, CODEX_MODEL, PROJECT_DIR)
 CLAUDE_RUNTIME = ClaudeCliRuntime(CLAUDE_BIN, CLAUDE_MODEL, PROJECT_DIR)
+CLAUDE_AUTH = ClaudeAuthLauncher(CLAUDE_BIN, PROJECT_DIR)
 TASKS = TaskManager(max_active=MAX_CONCURRENT_TASKS)
 SESSIONS = SessionManager()
 LOCAL_HOST_PATTERN = re.compile(r"\A(?:127\.0\.0\.1|localhost)(?::\d{1,5})?\Z", re.IGNORECASE)
@@ -310,6 +312,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "/api/chat",
                 "/api/v1/chat",
                 "/api/settings/runtime",
+                "/api/auth/claude/start",
             )
             and cancel_match is None
         ):
@@ -330,6 +333,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.handle_cancel(cancel_match.group(1))
         elif route == "/api/settings/runtime":
             self.handle_runtime_settings()
+        elif route == "/api/auth/claude/start":
+            self.handle_claude_auth()
         else:
             self.handle_chat(versioned=route == "/api/v1/chat")
 
@@ -371,6 +376,39 @@ class Handler(SimpleHTTPRequestHandler):
                 "settings": {
                     "max_concurrent_tasks": TASKS.get_max_active(),
                     "max_concurrent_tasks_limit": MAX_CONCURRENT_TASKS_LIMIT,
+                }
+            },
+        )
+
+    def handle_claude_auth(self):
+        payload = self.read_json_body()
+        if payload is None:
+            return
+        mode = str(payload.get("mode", "claudeai")).strip()
+        if mode not in ("claudeai", "console"):
+            self.send_api_error(
+                400,
+                ErrorCode.INVALID_FIELD,
+                "不支持的 Claude 登录方式",
+            )
+            return
+        try:
+            result = CLAUDE_AUTH.start(mode)
+        except OSError as error:
+            self.send_api_error(
+                503,
+                "runtime.claude_auth_unavailable",
+                f"无法启动 Claude 登录：{error}",
+                retryable=True,
+            )
+            return
+        self.send_json(
+            202,
+            {
+                "authentication": {
+                    **result,
+                    "provider": "claude",
+                    "credentials_handled_by": "claude-cli",
                 }
             },
         )

@@ -85,6 +85,15 @@ class FakeRuntime:
         return self.session
 
 
+class FakeAuthLauncher:
+    def __init__(self):
+        self.mode = ""
+
+    def start(self, mode):
+        self.mode = mode
+        return {"started": True, "already_running": False, "mode": mode}
+
+
 class WorkbenchFunctionTests(unittest.TestCase):
     def test_build_prompt_adds_guidance_for_new_thread(self):
         prompt = server.build_prompt("审计 example.com", "seo-audit", True)
@@ -306,6 +315,38 @@ class WorkbenchHttpTests(unittest.TestCase):
                     server.ErrorCode.INVALID_FIELD,
                     "并发任务数必须是 1 到 4 的整数",
                 )
+
+    def test_claude_auth_endpoint_starts_official_login(self):
+        launcher = FakeAuthLauncher()
+        with patch.object(server, "CLAUDE_AUTH", launcher):
+            status, _, body = self.request(
+                "POST",
+                "/api/auth/claude/start",
+                body=json.dumps({"mode": "claudeai"}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+
+        self.assertEqual(status, 202)
+        authentication = json.loads(body)["authentication"]
+        self.assertTrue(authentication["started"])
+        self.assertEqual(authentication["provider"], "claude")
+        self.assertEqual(authentication["credentials_handled_by"], "claude-cli")
+        self.assertEqual(launcher.mode, "claudeai")
+
+    def test_claude_auth_endpoint_rejects_unknown_mode(self):
+        status, _, body = self.request(
+            "POST",
+            "/api/auth/claude/start",
+            body=json.dumps({"mode": "password"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+
+        self.assertEqual(status, 400)
+        self.assert_api_error(
+            body,
+            server.ErrorCode.INVALID_FIELD,
+            "不支持的 Claude 登录方式",
+        )
 
     def test_chat_rejects_invalid_thread_sandbox_and_skill(self):
         cases = [

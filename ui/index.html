@@ -32,6 +32,9 @@
   .brand h1 { font-size:15px; margin:0; }
   .brand p { color:var(--muted); margin:0; font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .runtime { display:flex; align-items:center; gap:9px; color:var(--muted); font-size:12px; white-space:nowrap; }
+  .login-button { border:1px solid var(--line); background:var(--panel); color:var(--text); border-radius:8px; padding:6px 10px; cursor:pointer; font-size:11.5px; }
+  .login-button:hover { border-color:var(--brand); }
+  .login-button:disabled { opacity:.55; cursor:wait; }
   .dot { width:8px; height:8px; border-radius:50%; background:#9ca3af; }
   .dot.ok { background:#22c55e; box-shadow:0 0 0 4px rgba(34,197,94,.12); }
   .dot.bad { background:#ef4444; box-shadow:0 0 0 4px rgba(239,68,68,.12); }
@@ -121,7 +124,11 @@
       <div class="logo">SEO</div>
       <div><h1>Claude SEO AI 工作台</h1><p>SEO 与文件任务走 Codex，文章创作走 Claude</p></div>
     </div>
-    <div class="runtime" id="runtime"><i class="dot"></i><span>正在检测 Codex 和 Claude…</span></div>
+    <div class="runtime">
+      <i class="dot" id="runtimeDot"></i>
+      <span id="runtime">正在检测 Codex 和 Claude…</span>
+      <button class="login-button" id="claudeLogin" hidden>登录 Claude（订阅）</button>
+    </div>
   </header>
 
   <main class="layout">
@@ -195,7 +202,8 @@ const state = {
   skills: [], selectedSkill: "", sessionId: localStorage.getItem("claudeSeoSession") || "",
   running: false, messages: JSON.parse(localStorage.getItem("claudeSeoMessages") || "[]"),
   activeTaskId: "", maxConcurrentTasks: 1,
-  taskType: localStorage.getItem("claudeSeoTaskType") || "general", runtimeStatus: {}
+  taskType: localStorage.getItem("claudeSeoTaskType") || "general", runtimeStatus: {},
+  authPolling: false
 };
 
 function escapeHtml(value) {
@@ -206,6 +214,9 @@ function cleanDisplayedText(value) {
   return String(value).replace(
     /(?:\n?[━]{10,}\s*\n)?Built by agricidaniel[^\n]*AI Marketing Hub community\s*\n🆓\s*Free\s*[→>-]+\s*https:\/\/www\.skool\.com\/ai-marketing-hub\s*\n⚡\s*Pro\s*[→>-]+\s*https:\/\/www\.skool\.com\/ai-marketing-hub-pro(?:\s*\n[━]{10,})?/i,
     ""
+  ).replace(
+    /Claude 尚未登录。请先在终端运行 `?claude auth login`?，完成登录后刷新页面。?/g,
+    "Claude 尚未登录。请点击页面顶部“登录 Claude（订阅）”，并在 Claude 官方页面完成登录。"
   ).trimEnd();
 }
 
@@ -227,9 +238,14 @@ function setRuntime(runtime) {
   const codexOk = runtime.codex_available && runtime.logged_in;
   const claudeOk = runtime.claude_available && runtime.claude_logged_in;
   const ok = codexOk && claudeOk;
-  const codexText = codexOk ? "Codex 已登录" : "Codex 未登录";
-  const claudeText = claudeOk ? "Claude 已登录" : "Claude 未登录";
-  $("#runtime").innerHTML = `<i class="dot ${ok ? "ok" : "bad"}"></i><span>${codexText} · ${claudeText}</span>`;
+  const codexText = codexOk ? "Codex 已登录" : (runtime.codex_available ? "Codex 未登录" : "未安装 Codex");
+  const claudeText = claudeOk ? "Claude 已登录" : (runtime.claude_available ? "Claude 未登录" : "未安装 Claude");
+  $("#runtimeDot").className = `dot ${ok ? "ok" : "bad"}`;
+  $("#runtime").textContent = `${codexText} · ${claudeText}`;
+  const loginButton = $("#claudeLogin");
+  loginButton.hidden = claudeOk || !runtime.claude_available;
+  loginButton.disabled = state.authPolling;
+  loginButton.textContent = state.authPolling ? "等待登录…" : "登录 Claude（订阅）";
   const writeOption = $("#sandbox").querySelector('option[value="workspace-write"]');
   const writeEnabled = runtime.max_sandbox === "workspace-write";
   writeOption.disabled = !writeEnabled;
@@ -239,6 +255,41 @@ function setRuntime(runtime) {
   $("#concurrency").value = String(state.maxConcurrentTasks);
   $("#taskType").value = state.taskType;
   updateProviderHint();
+}
+
+async function startClaudeLogin() {
+  if (state.authPolling) return;
+  state.authPolling = true;
+  setRuntime(state.runtimeStatus);
+  try {
+    const response = await fetch("/api/auth/claude/start", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({mode: "claudeai"})
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      const message = typeof body.error === "object" ? body.error.message : body.error;
+      throw new Error(message || `启动登录失败：${response.status}`);
+    }
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const runtime = await getJson("/api/runtime");
+      state.runtimeStatus = runtime;
+      if (runtime.claude_logged_in) {
+        state.authPolling = false;
+        setRuntime(runtime);
+        addMessage("assistant", "Claude 登录成功，现在可以使用文章创作。", {provider: "系统"});
+        return;
+      }
+      setRuntime(runtime);
+    }
+    throw new Error("登录尚未完成，请完成 Claude 官方页面中的步骤后再点击登录");
+  } catch (error) {
+    state.authPolling = false;
+    setRuntime(state.runtimeStatus);
+    addMessage("assistant", `Claude 登录未完成：${error.message}`, {error: true, provider: "系统"});
+  }
 }
 
 function providerName() {
@@ -259,7 +310,9 @@ function providerReady() {
 function updateProviderHint() {
   const provider = providerName();
   if (!providerReady()) {
-    $("#prompt").placeholder = `${provider} 尚未登录，请先在终端运行 ${providerLoginCommand()}`;
+    $("#prompt").placeholder = provider === "Claude"
+      ? "Claude 尚未登录，请点击页面顶部“登录 Claude（订阅）”"
+      : `${provider} 尚未登录，请先在终端运行 ${providerLoginCommand()}`;
   } else if (state.taskType === "article") {
     $("#prompt").placeholder = "描述主题、受众、关键词、篇幅和语言，Claude 会输出完整文章…";
   } else {
@@ -400,7 +453,10 @@ async function sendMessage(prefill) {
   if (!message) return;
   if (!providerReady()) {
     const provider = providerName();
-    addMessage("assistant", `${provider} 尚未登录。请先在终端运行 \`${providerLoginCommand()}\`，完成登录后刷新页面。`, {error: true, provider});
+    const guidance = provider === "Claude"
+      ? "请点击页面顶部“登录 Claude（订阅）”，并在 Claude 官方页面完成登录。"
+      : `请先运行 \`${providerLoginCommand()}\`，完成登录后刷新页面。`;
+    addMessage("assistant", `${provider} 尚未登录。${guidance}`, {error: true, provider});
     return;
   }
 
@@ -495,7 +551,8 @@ function switchTaskType(nextType) {
 
 async function init() {
   if (location.protocol === "file:") {
-    $("#runtime").innerHTML = `<i class="dot bad"></i><span>打开方式不正确：请运行启动器后访问 localhost</span>`;
+    $("#runtimeDot").className = "dot bad";
+    $("#runtime").textContent = "打开方式不正确：请运行启动器后访问 localhost";
     $("#prompt").disabled = true;
     $("#send").disabled = true;
     return;
@@ -508,12 +565,14 @@ async function init() {
       await updateConcurrency(savedConcurrency, false);
     }
   } catch (error) {
-    $("#runtime").innerHTML = `<i class="dot bad"></i><span>${escapeHtml(error.message)}</span>`;
+    $("#runtimeDot").className = "dot bad";
+    $("#runtime").textContent = error.message;
   }
   updateContext();
   if (state.messages.length) renderMessages();
   $("#skillSearch").addEventListener("input", renderSkills);
   $("#sandbox").addEventListener("change", updateContext);
+  $("#claudeLogin").addEventListener("click", startClaudeLogin);
   $("#taskType").addEventListener("change", event => switchTaskType(event.target.value));
   $("#concurrency").addEventListener("change", async event => {
     const previous = state.maxConcurrentTasks;
