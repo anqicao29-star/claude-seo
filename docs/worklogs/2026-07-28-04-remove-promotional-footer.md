@@ -31,8 +31,9 @@ Pro  → skool.com/ai-marketing-hub-pro
    - 不添加与用户任务无关的页脚。
 4. 新增后台回答清洁器。
 5. v1 流式接口和旧版兼容接口都会过滤该页脚。
-6. 正常报告内容和普通链接不会被误删。
-7. 后台服务已经重启，修改立即生效。
+6. 前端显示历史消息时也会清除旧回答中已经保存的推广页脚。
+7. 正常报告内容和普通链接不会被误删。
+8. 后台服务已经重启，修改立即生效。
 
 ## 验证结果
 
@@ -53,7 +54,7 @@ Pro  → skool.com/ai-marketing-hub-pro
 
 - 文件：`dist/claude-seo-workbench-local.zip`
 - 大小：约 2.3 MB
-- SHA-256：`9c397088e4cca262cd100765d17596d2cbcd10fe147496a6ef4709f7dd2d8cfd`
+- SHA-256：`4a0ff205a6422fb9a12dd331d363db7dbfaf5a2a39f0255ad8935dc152c60840`
 
 ## 距离封闭测试还有多久
 
