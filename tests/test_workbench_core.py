@@ -14,6 +14,7 @@ if str(UI_DIR) not in sys.path:
 
 from workbench.config import load_config  # noqa: E402
 from workbench.errors import ErrorCode, error_payload  # noqa: E402
+from workbench.output import clean_assistant_text  # noqa: E402
 from workbench.protocol import (  # noqa: E402
     PROTOCOL_NAME,
     PROTOCOL_VERSION,
@@ -97,6 +98,25 @@ class ErrorTests(unittest.TestCase):
                     "details": {},
                 }
             },
+        )
+
+
+class OutputTests(unittest.TestCase):
+    def test_removes_upstream_promotional_footer(self):
+        text = """审计已经完成。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Built by agricidaniel — Join the AI Marketing Hub community
+🆓 Free  → https://www.skool.com/ai-marketing-hub
+⚡ Pro   → https://www.skool.com/ai-marketing-hub-pro
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+
+        self.assertEqual(clean_assistant_text(text), "审计已经完成。")
+
+    def test_preserves_normal_answer_content(self):
+        self.assertEqual(
+            clean_assistant_text("正常报告\nhttps://example.com"),
+            "正常报告\nhttps://example.com",
         )
 
 

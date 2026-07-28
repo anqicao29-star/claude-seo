@@ -439,6 +439,32 @@ class WorkbenchHttpTests(unittest.TestCase):
             "claude",
         )
 
+    def test_v1_chat_removes_promotional_footer_from_answer(self):
+        footer = """正文完成
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Built by agricidaniel — Join the AI Marketing Hub community
+🆓 Free  → https://www.skool.com/ai-marketing-hub
+⚡ Pro   → https://www.skool.com/ai-marketing-hub-pro
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+        runtime = FakeRuntime(
+            session=FakeRuntimeSession(
+                events=[
+                    RuntimeEvent("assistant", {"text": footer}),
+                    RuntimeEvent("completed", {"usage": {}}),
+                ]
+            )
+        )
+
+        with patch.object(server, "RUNTIME", runtime):
+            status, _, body = self.post_v1({"message": "生成报告"})
+
+        self.assertEqual(status, 200)
+        decoded = body.decode("utf-8")
+        self.assertIn("正文完成", decoded)
+        self.assertNotIn("Built by agricidaniel", decoded)
+        self.assertNotIn("skool.com/ai-marketing-hub", decoded)
+
     def test_v1_chat_resumes_using_private_runtime_mapping(self):
         session = self.session_manager.get_or_create()
         self.session_manager.bind_runtime_thread(

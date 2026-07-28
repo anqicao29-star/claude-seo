@@ -23,6 +23,7 @@ if str(UI_DIR) not in sys.path:
 
 from workbench.config import load_config
 from workbench.errors import ErrorCode, error_payload
+from workbench.output import clean_assistant_text
 from workbench.protocol import EventStream
 from workbench.runtime import ClaudeCliRuntime, CodexCliRuntime, RuntimeRequest
 from workbench.sessions import SessionManager
@@ -221,12 +222,14 @@ def build_prompt(message, skill, is_new_thread, task_type="general"):
             "根据需要读取项目中的 CLAUDE.md、skills/seo/SKILL.md 和相关内容技能。"
             "优先输出可直接交付的完整 Markdown 正文；如果用户明确要求保存文件且当前权限允许，"
             "再写入用户指定的位置。不要读取或输出任何登录凭据。"
+            "最终输出不要附加开发者署名、社区推广、营销链接或与用户任务无关的页脚。"
         )
     else:
         guidance = (
             "你正在 claude-seo 项目根目录中工作。请把用户的自然语言目标当作需要真正完成的任务，"
             "不要只介绍技能菜单。根据任务自主读取项目中的 AGENTS.md、skills/seo/SKILL.md 和相关技能文件，"
             "使用适用的脚本与工具；若用户要求修改文件，请先检查目标并只修改任务范围内的内容。"
+            "最终输出不要附加开发者署名、社区推广、营销链接或与用户任务无关的页脚。"
         )
     if skill:
         guidance += f" 用户选择了 {skill}，请优先读取 skills/{skill}/SKILL.md 并遵循其中的工作流。"
@@ -535,7 +538,12 @@ class Handler(SimpleHTTPRequestHandler):
                     elif runtime_event.type == "activity":
                         emit_v1("task.activity", runtime_event.data)
                     elif runtime_event.type == "assistant":
-                        emit_v1("assistant.message", runtime_event.data)
+                        assistant_data = dict(runtime_event.data)
+                        assistant_data["text"] = clean_assistant_text(
+                            str(assistant_data.get("text", ""))
+                        )
+                        if assistant_data["text"]:
+                            emit_v1("assistant.message", assistant_data)
                     elif runtime_event.type == "warning":
                         emit_v1("task.warning", runtime_event.data)
                     elif runtime_event.type == "error":
@@ -547,6 +555,12 @@ class Handler(SimpleHTTPRequestHandler):
                         usage = runtime_event.data.get("usage", {})
                     continue
                 client_event = runtime_event.legacy_payload()
+                if client_event["type"] == "assistant":
+                    client_event["text"] = clean_assistant_text(
+                        str(client_event.get("text", ""))
+                    )
+                    if not client_event["text"]:
+                        continue
                 if client_event["type"] == "error":
                     emitted_error = True
                 emit(client_event)
