@@ -170,6 +170,22 @@ class ClaudeCliRuntimeTests(unittest.TestCase):
         self.assertEqual(status.authentication_status, "已登录")
         self.assertEqual(status.model, "sonnet")
 
+    def test_status_reports_logged_out_json_cleanly(self):
+        results = [
+            SimpleNamespace(returncode=0, stdout="2.1.199 (Claude Code)", stderr=""),
+            SimpleNamespace(
+                returncode=1,
+                stdout=json.dumps({"loggedIn": False, "authMethod": "none"}, indent=2),
+                stderr="",
+            ),
+        ]
+        with patch.object(subprocess, "run", side_effect=results):
+            status = self.runtime.status()
+
+        self.assertTrue(status.available)
+        self.assertFalse(status.authenticated)
+        self.assertEqual(status.authentication_status, "未登录")
+
 
 if __name__ == "__main__":
     unittest.main()

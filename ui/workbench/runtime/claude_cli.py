@@ -160,13 +160,13 @@ class ClaudeCliRuntime(RuntimeAdapter):
         )
         authenticated = False
         auth_status = auth_output or auth_error or "未登录"
-        if auth_code == 0 and auth_output:
+        if auth_output:
             try:
                 auth_data = json.loads(auth_output)
                 authenticated = bool(auth_data.get("loggedIn"))
                 auth_status = "已登录" if authenticated else "未登录"
             except json.JSONDecodeError:
-                authenticated = "logged" in auth_output.lower()
+                authenticated = auth_code == 0 and "logged" in auth_output.lower()
         return RuntimeStatus(
             available=version_code == 0,
             version=(version or version_error or "未检测到").splitlines()[-1],
