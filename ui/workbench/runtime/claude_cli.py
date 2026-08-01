@@ -131,6 +131,8 @@ class ClaudeCliRuntime(RuntimeAdapter):
             "--verbose",
             "--model",
             self.model,
+            "--effort",
+            request.effort,
             *permission_args,
         ]
         if request.thread_id:

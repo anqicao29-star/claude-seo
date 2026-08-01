@@ -114,6 +114,8 @@ class ClaudeCliRuntimeTests(unittest.TestCase):
                 "--verbose",
                 "--model",
                 "sonnet",
+                "--effort",
+                "medium",
                 "--permission-mode",
                 "plan",
                 "--allowedTools",

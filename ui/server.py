@@ -63,6 +63,7 @@ LOCAL_HOST_PATTERN = re.compile(r"\A(?:127\.0\.0\.1|localhost)(?::\d{1,5})?\Z", 
 TASK_CANCEL_PATTERN = re.compile(r"\A/api/tasks/(task_[0-9a-f]{32})/cancel\Z")
 SESSION_ID_PATTERN = re.compile(r"\Asession_[0-9a-f]{32}\Z")
 TASK_TYPES = {"general": "codex", "article": "claude"}
+RESPONSE_MODES = {"fast": "low", "quality": "medium"}
 RUNTIME_STATUS_CACHE_TTL_SECONDS = 2.0
 _RUNTIME_STATUS_CACHE = None
 _RUNTIME_STATUS_CACHED_AT = 0.0
@@ -486,6 +487,7 @@ class Handler(SimpleHTTPRequestHandler):
         skill = str(payload.get("skill", "")).strip()
         sandbox = str(payload.get("sandbox", "read-only"))
         task_type = str(payload.get("task_type", "general")).strip()
+        response_mode = str(payload.get("response_mode", "fast")).strip()
         if not message or len(message) > MAX_MESSAGE_CHARS:
             self.send_api_error(400, ErrorCode.INVALID_FIELD, "请输入有效任务内容")
             return
@@ -507,6 +509,9 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if task_type not in TASK_TYPES:
             self.send_api_error(400, ErrorCode.INVALID_FIELD, "不支持的任务类型")
+            return
+        if response_mode not in RESPONSE_MODES:
+            self.send_api_error(400, ErrorCode.INVALID_FIELD, "不支持的响应速度模式")
             return
         if sandbox == "workspace-write" and MAX_SANDBOX != "workspace-write":
             self.send_api_error(403, ErrorCode.MODE_DENIED, "服务当前仅允许只读任务")
@@ -578,6 +583,7 @@ class Handler(SimpleHTTPRequestHandler):
                         "sandbox": sandbox,
                         "runtime": runtime_name,
                         "task_type": task_type,
+                        "response_mode": response_mode,
                     },
                 )
             else:
@@ -592,6 +598,7 @@ class Handler(SimpleHTTPRequestHandler):
                     ),
                     thread_id=runtime_thread_id,
                     sandbox=sandbox,
+                    effort=RESPONSE_MODES[response_mode],
                 )
             )
             TASKS.bind_session(task.task_id, runtime_session)

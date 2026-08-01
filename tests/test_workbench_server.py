@@ -403,6 +403,11 @@ class WorkbenchHttpTests(unittest.TestCase):
                 server.ErrorCode.INVALID_FIELD,
                 "不支持的任务类型",
             ),
+            (
+                {"message": "test", "response_mode": "instant"},
+                server.ErrorCode.INVALID_FIELD,
+                "不支持的响应速度模式",
+            ),
         ]
 
         for payload, code, message in cases:
@@ -503,6 +508,7 @@ class WorkbenchHttpTests(unittest.TestCase):
         self.assertIn("# 完整文章", body.decode("utf-8"))
         self.assertIn("真正完成用户要求的文章", claude_runtime.request.prompt)
         self.assertEqual(claude_runtime.request.thread_id, "")
+        self.assertEqual(claude_runtime.request.effort, "low")
         session_id = headers["X-Session-ID"]
         self.assertEqual(
             self.session_manager.runtime_thread_id(session_id),

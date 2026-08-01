@@ -12,6 +12,7 @@ class RuntimeRequest:
     prompt: str
     thread_id: str = ""
     sandbox: str = "read-only"
+    effort: str = "medium"
 
 
 @dataclass(frozen=True)
@@ -59,4 +60,3 @@ class RuntimeAdapter(ABC):
     @abstractmethod
     def start(self, request: RuntimeRequest) -> RuntimeSession:
         """Start one runtime task."""
-

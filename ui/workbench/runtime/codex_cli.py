@@ -139,6 +139,8 @@ class CodexCliRuntime(RuntimeAdapter):
                 f'sandbox_mode="{request.sandbox}"',
                 "-c",
                 'approval_policy="never"',
+                "-c",
+                f'model_reasoning_effort="{request.effort}"',
                 request.thread_id,
                 "-",
             ]
@@ -154,6 +156,8 @@ class CodexCliRuntime(RuntimeAdapter):
             request.sandbox,
             "-c",
             'approval_policy="never"',
+            "-c",
+            f'model_reasoning_effort="{request.effort}"',
             "--skip-git-repo-check",
             "-",
         ]
