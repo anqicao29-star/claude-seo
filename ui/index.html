@@ -284,7 +284,7 @@ async function startClaudeLogin() {
       }
       setRuntime(runtime);
     }
-    throw new Error("登录尚未完成，请完成 Claude 官方页面中的步骤后再点击登录");
+    throw new Error("登录已过期，旧登录流程已自动结束。请重新点击登录，并使用最新验证码");
   } catch (error) {
     state.authPolling = false;
     setRuntime(state.runtimeStatus);
