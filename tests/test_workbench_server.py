@@ -110,6 +110,18 @@ class WorkbenchFunctionTests(unittest.TestCase):
             "继续上一项任务",
         )
 
+    def test_fast_prompt_skips_project_scanning_for_simple_questions(self):
+        prompt = server.build_prompt(
+            "你好",
+            "",
+            True,
+            task_type="general",
+            response_mode="fast",
+        )
+
+        self.assertIn("简单问答请直接回答", prompt)
+        self.assertIn("不要读取项目文件", prompt)
+
     def test_api_runtime_uses_last_output_lines(self):
         runtime = FakeRuntime(
             status=RuntimeStatus(

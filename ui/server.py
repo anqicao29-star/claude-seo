@@ -261,7 +261,13 @@ ROUTES = {
 }
 
 
-def build_prompt(message, skill, is_new_thread, task_type="general"):
+def build_prompt(
+    message,
+    skill,
+    is_new_thread,
+    task_type="general",
+    response_mode="quality",
+):
     if not is_new_thread:
         return message
     if task_type == "article":
@@ -273,6 +279,11 @@ def build_prompt(message, skill, is_new_thread, task_type="general"):
             "再写入用户指定的位置。不要读取或输出任何登录凭据。"
             "最终输出不要附加开发者署名、社区推广、营销链接或与用户任务无关的页脚。"
         )
+        if response_mode == "fast":
+            guidance += (
+                "当前为速度优先模式：直接完成正文，不做与交付无关的探索；"
+                "只在用户要求数据核实或任务确实依赖项目资料时读取必要文件。"
+            )
     else:
         guidance = (
             "你正在 claude-seo 项目根目录中工作。请把用户的自然语言目标当作需要真正完成的任务，"
@@ -280,6 +291,14 @@ def build_prompt(message, skill, is_new_thread, task_type="general"):
             "使用适用的脚本与工具；若用户要求修改文件，请先检查目标并只修改任务范围内的内容。"
             "最终输出不要附加开发者署名、社区推广、营销链接或与用户任务无关的页脚。"
         )
+        if response_mode == "fast":
+            guidance = (
+                "你正在本地 Claude SEO 工作台中执行任务。当前为速度优先模式。"
+                "简单问答请直接回答，不要读取项目文件、扫描技能或运行工具。"
+                "只有用户明确要求 SEO 分析、联网检查或文件处理时，才按需读取最少的相关"
+                " AGENTS.md、SKILL.md 或目标文件并真正完成任务。"
+                "最终输出不要附加开发者署名、社区推广、营销链接或无关页脚。"
+            )
     if skill:
         guidance += f" 用户选择了 {skill}，请优先读取 skills/{skill}/SKILL.md 并遵循其中的工作流。"
     return f"{guidance}\n\n用户任务：\n{message}"
@@ -595,6 +614,7 @@ class Handler(SimpleHTTPRequestHandler):
                         skill,
                         not runtime_thread_id,
                         task_type,
+                        response_mode,
                     ),
                     thread_id=runtime_thread_id,
                     sandbox=sandbox,
