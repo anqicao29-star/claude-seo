@@ -75,8 +75,10 @@ class FakeRuntime:
         )
         self.request = None
         self.started = threading.Event()
+        self.status_calls = 0
 
     def status(self):
+        self.status_calls += 1
         return self._status
 
     def start(self, request):
@@ -131,7 +133,8 @@ class WorkbenchFunctionTests(unittest.TestCase):
             patch.object(server, "RUNTIME", runtime),
             patch.object(server, "CLAUDE_RUNTIME", claude_runtime),
         ):
-            result = server.api_runtime()
+            server.invalidate_runtime_status_cache()
+            result = server.api_runtime(force_refresh=True)
 
         self.assertTrue(result["codex_available"])
         self.assertTrue(result["logged_in"])
@@ -148,6 +151,36 @@ class WorkbenchFunctionTests(unittest.TestCase):
             server.MAX_CONCURRENT_TASKS,
         )
         self.assertEqual(result["task_timeout_seconds"], server.TASK_TIMEOUT_SECONDS)
+
+    def test_api_runtime_reuses_short_lived_status_cache(self):
+        runtime = FakeRuntime()
+        claude_runtime = FakeRuntime()
+        with (
+            patch.object(server, "RUNTIME", runtime),
+            patch.object(server, "CLAUDE_RUNTIME", claude_runtime),
+        ):
+            server.invalidate_runtime_status_cache()
+            first = server.api_runtime()
+            second = server.api_runtime()
+
+        self.assertEqual(first, second)
+        self.assertEqual(runtime.status_calls, 1)
+        self.assertEqual(claude_runtime.status_calls, 1)
+
+    def test_runtime_cache_invalidation_forces_fresh_status(self):
+        runtime = FakeRuntime()
+        claude_runtime = FakeRuntime()
+        with (
+            patch.object(server, "RUNTIME", runtime),
+            patch.object(server, "CLAUDE_RUNTIME", claude_runtime),
+        ):
+            server.invalidate_runtime_status_cache()
+            server.api_runtime()
+            server.invalidate_runtime_status_cache()
+            server.api_runtime()
+
+        self.assertEqual(runtime.status_calls, 2)
+        self.assertEqual(claude_runtime.status_calls, 2)
 
 
 class WorkbenchHttpTests(unittest.TestCase):

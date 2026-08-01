@@ -13,7 +13,9 @@ import re
 import sqlite3
 import sys
 import threading
+import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -61,6 +63,11 @@ LOCAL_HOST_PATTERN = re.compile(r"\A(?:127\.0\.0\.1|localhost)(?::\d{1,5})?\Z", 
 TASK_CANCEL_PATTERN = re.compile(r"\A/api/tasks/(task_[0-9a-f]{32})/cancel\Z")
 SESSION_ID_PATTERN = re.compile(r"\Asession_[0-9a-f]{32}\Z")
 TASK_TYPES = {"general": "codex", "article": "claude"}
+RUNTIME_STATUS_CACHE_TTL_SECONDS = 2.0
+_RUNTIME_STATUS_CACHE = None
+_RUNTIME_STATUS_CACHED_AT = 0.0
+_RUNTIME_STATUS_CACHE_LOCK = threading.RLock()
+_RUNTIME_STATUS_REFRESH_LOCK = threading.Lock()
 
 CATEGORIES = {
     "编排": ["seo"],
@@ -179,9 +186,48 @@ def api_drift():
         return {"available": False, "error": str(error), "baselines": []}
 
 
-def api_runtime():
-    codex_status = RUNTIME.status()
-    claude_status = CLAUDE_RUNTIME.status()
+def invalidate_runtime_status_cache():
+    global _RUNTIME_STATUS_CACHE, _RUNTIME_STATUS_CACHED_AT
+    with _RUNTIME_STATUS_CACHE_LOCK:
+        _RUNTIME_STATUS_CACHE = None
+        _RUNTIME_STATUS_CACHED_AT = 0.0
+
+
+def get_runtime_statuses(force_refresh=False):
+    global _RUNTIME_STATUS_CACHE, _RUNTIME_STATUS_CACHED_AT
+    now = time.monotonic()
+    with _RUNTIME_STATUS_CACHE_LOCK:
+        if (
+            not force_refresh
+            and _RUNTIME_STATUS_CACHE is not None
+            and now - _RUNTIME_STATUS_CACHED_AT < RUNTIME_STATUS_CACHE_TTL_SECONDS
+        ):
+            return _RUNTIME_STATUS_CACHE
+
+    with _RUNTIME_STATUS_REFRESH_LOCK:
+        now = time.monotonic()
+        with _RUNTIME_STATUS_CACHE_LOCK:
+            if (
+                not force_refresh
+                and _RUNTIME_STATUS_CACHE is not None
+                and now - _RUNTIME_STATUS_CACHED_AT < RUNTIME_STATUS_CACHE_TTL_SECONDS
+            ):
+                return _RUNTIME_STATUS_CACHE
+        with ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="runtime-status",
+        ) as executor:
+            codex_future = executor.submit(RUNTIME.status)
+            claude_future = executor.submit(CLAUDE_RUNTIME.status)
+            statuses = (codex_future.result(), claude_future.result())
+        with _RUNTIME_STATUS_CACHE_LOCK:
+            _RUNTIME_STATUS_CACHE = statuses
+            _RUNTIME_STATUS_CACHED_AT = time.monotonic()
+        return statuses
+
+
+def api_runtime(force_refresh=False):
+    codex_status, claude_status = get_runtime_statuses(force_refresh)
     return {
         "codex_available": codex_status.available,
         "codex_version": codex_status.version,
@@ -402,6 +448,7 @@ class Handler(SimpleHTTPRequestHandler):
                 retryable=True,
             )
             return
+        invalidate_runtime_status_cache()
         self.send_json(
             202,
             {
@@ -678,5 +725,12 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 7777
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    threading.Thread(
+        target=get_runtime_statuses,
+        kwargs={"force_refresh": True},
+        daemon=True,
+        name="runtime-status-warmup",
+    ).start()
     print(f"claude-seo AI 工作台: http://localhost:{port}")
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    httpd.serve_forever()
