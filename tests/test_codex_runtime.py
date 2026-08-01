@@ -204,6 +204,15 @@ class CodexCliRuntimeTests(unittest.TestCase):
         self.assertEqual(popen.call_args.kwargs["cwd"], REPO_ROOT)
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
 
+    def test_fast_mode_skips_user_plugins_and_automatic_rules(self):
+        command = self.runtime.command(
+            RuntimeRequest(prompt="快速回答", effort="low")
+        )
+
+        self.assertIn("--ignore-user-config", command)
+        self.assertIn("--ignore-rules", command)
+        self.assertIn('model_reasoning_effort="low"', command)
+
     def test_status_reports_last_cli_output_lines(self):
         results = [
             SimpleNamespace(returncode=0, stdout="notice\ncodex-cli 1.2.3", stderr=""),

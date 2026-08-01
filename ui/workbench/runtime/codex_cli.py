@@ -126,6 +126,11 @@ class CodexCliRuntime(RuntimeAdapter):
         self.workspace = workspace
 
     def command(self, request: RuntimeRequest) -> List[str]:
+        speed_args = (
+            ["--ignore-user-config", "--ignore-rules"]
+            if request.effort == "low"
+            else []
+        )
         if request.thread_id:
             return [
                 self.executable,
@@ -141,6 +146,7 @@ class CodexCliRuntime(RuntimeAdapter):
                 'approval_policy="never"',
                 "-c",
                 f'model_reasoning_effort="{request.effort}"',
+                *speed_args,
                 request.thread_id,
                 "-",
             ]
@@ -158,6 +164,7 @@ class CodexCliRuntime(RuntimeAdapter):
             'approval_policy="never"',
             "-c",
             f'model_reasoning_effort="{request.effort}"',
+            *speed_args,
             "--skip-git-repo-check",
             "-",
         ]
