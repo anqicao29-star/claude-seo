@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import os
-import signal
 import subprocess
 import threading
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from .base import RuntimeAdapter, RuntimeEvent, RuntimeRequest, RuntimeSession, RuntimeStatus
+from .processes import terminate_process_tree
 
 
 def _text_blocks(message: Dict[str, Any]) -> str:
@@ -67,6 +67,7 @@ def normalize_claude_event(event: Dict[str, Any]) -> List[RuntimeEvent]:
 class ClaudeCliSession(RuntimeSession):
     def __init__(self, process: subprocess.Popen, prompt: str):
         self.process = process
+        self._terminate_lock = threading.Lock()
         self._stderr_lines: List[str] = []
         self._stderr_thread = threading.Thread(target=self._collect_stderr, daemon=True)
         self._stderr_thread.start()
@@ -99,16 +100,8 @@ class ClaudeCliSession(RuntimeSession):
         return "\n".join(self._stderr_lines[-limit:]).strip()
 
     def terminate(self) -> None:
-        if self.process.poll() is not None:
-            return
-        pid = getattr(self.process, "pid", None)
-        if pid is not None and hasattr(os, "killpg") and hasattr(os, "getpgid"):
-            try:
-                os.killpg(os.getpgid(pid), signal.SIGTERM)
-                return
-            except (OSError, ProcessLookupError):
-                pass
-        self.process.terminate()
+        with self._terminate_lock:
+            terminate_process_tree(self.process)
 
 
 class ClaudeCliRuntime(RuntimeAdapter):
@@ -193,6 +186,5 @@ class ClaudeCliRuntime(RuntimeAdapter):
         try:
             return ClaudeCliSession(process, request.prompt)
         except Exception:
-            if process.poll() is None:
-                process.terminate()
+            terminate_process_tree(process)
             raise

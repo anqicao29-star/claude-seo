@@ -337,10 +337,6 @@ function providerName() {
   return state.taskType === "article" ? "Claude" : "Codex";
 }
 
-function providerLoginCommand() {
-  return state.taskType === "article" ? "claude auth login" : "codex login";
-}
-
 function providerReady() {
   const runtime = state.runtimeStatus;
   return state.taskType === "article"
@@ -348,12 +344,26 @@ function providerReady() {
     : runtime.codex_available && runtime.logged_in;
 }
 
+function providerUnavailableMessage() {
+  const runtime = state.runtimeStatus;
+  if (state.taskType === "article") {
+    if (!runtime.claude_available) {
+      return "Claude 尚未安装。请先安装 Claude Code，安装完成后刷新页面。";
+    }
+    return "Claude 尚未登录。请点击页面顶部“登录 Claude（订阅）”，并在 Claude 官方页面完成登录。";
+  }
+  if (!runtime.codex_available) {
+    return "Codex 尚未安装。请先安装 Codex CLI，安装完成后刷新页面。";
+  }
+  if (runtime.codex_update_required) {
+    return "当前 Codex CLI 版本过旧。请先在终端运行 `codex update`，然后刷新页面。";
+  }
+  return "Codex 尚未登录。请先在终端运行 `codex login`，完成登录后刷新页面。";
+}
+
 function updateProviderHint() {
-  const provider = providerName();
   if (!providerReady()) {
-    $("#prompt").placeholder = provider === "Claude"
-      ? "Claude 尚未登录，请点击页面顶部“登录 Claude（订阅）”"
-      : `${provider} 尚未登录，请先在终端运行 ${providerLoginCommand()}`;
+    $("#prompt").placeholder = providerUnavailableMessage();
   } else if (state.taskType === "article") {
     $("#prompt").placeholder = "描述主题、受众、关键词、篇幅和语言，Claude 会输出完整文章…";
   } else {
@@ -564,12 +574,7 @@ async function sendMessage(prefill) {
   if (!message) return;
   if (!providerReady()) {
     const provider = providerName();
-    const guidance = provider === "Claude"
-      ? "请点击页面顶部“登录 Claude（订阅）”，并在 Claude 官方页面完成登录。"
-      : state.runtimeStatus.codex_update_required
-        ? "当前 Codex CLI 版本过旧，请先在终端运行 `codex update`，然后刷新页面。"
-      : `请先运行 \`${providerLoginCommand()}\`，完成登录后刷新页面。`;
-    addMessage("assistant", `${provider} 尚未登录。${guidance}`, {error: true, provider});
+    addMessage("assistant", providerUnavailableMessage(), {error: true, provider});
     return;
   }
 
