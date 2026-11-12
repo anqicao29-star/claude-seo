@@ -66,7 +66,9 @@ def load_config(
         agents_dir=Path(values.get("CLAUDE_SEO_AGENTS_DIR", str(project_dir / "agents"))),
         drift_db=home / ".cache" / "claude-seo" / "drift" / "baselines.db",
         codex_bin=values.get("CLAUDE_SEO_CODEX_BIN") or shutil.which("codex") or "codex",
-        codex_model=values.get("CLAUDE_SEO_CODEX_MODEL", "gpt-5.4"),
+        # Keep the workbench off retired ChatGPT-sign-in model defaults.
+        # CLAUDE_SEO_CODEX_MODEL can override this for another account tier.
+        codex_model=values.get("CLAUDE_SEO_CODEX_MODEL", "gpt-6.1-sol"),
         claude_bin=values.get("CLAUDE_SEO_CLAUDE_BIN") or shutil.which("claude") or "claude",
         claude_model=values.get("CLAUDE_SEO_CLAUDE_MODEL", "sonnet"),
         max_sandbox=max_sandbox,

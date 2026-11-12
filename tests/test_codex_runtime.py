@@ -213,6 +213,13 @@ class CodexCliRuntimeTests(unittest.TestCase):
         self.assertIn("--ignore-rules", command)
         self.assertIn('model_reasoning_effort="low"', command)
 
+    def test_omits_model_flag_when_using_account_default(self):
+        runtime = CodexCliRuntime("codex-test", "", REPO_ROOT)
+
+        command = runtime.command(RuntimeRequest(prompt="使用默认模型"))
+
+        self.assertNotIn("--model", command)
+
     def test_status_reports_last_cli_output_lines(self):
         results = [
             SimpleNamespace(returncode=0, stdout="notice\ncodex-cli 1.2.3", stderr=""),

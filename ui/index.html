@@ -116,6 +116,19 @@
   .activity div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .error { color:var(--danger); }
   .warning { color:var(--warn); font-size:12px; margin-top:7px; }
+  .write-preview { margin-top:14px; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--panel); }
+  .preview-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:11px 13px; background:var(--subtle); }
+  .preview-head strong { display:block; font-size:12.5px; }
+  .preview-head span { display:block; color:var(--muted); font-size:11px; margin-top:2px; }
+  .preview-status { flex:0 0 auto; padding:2px 7px; border-radius:999px; background:var(--brand-soft); color:var(--brand); font-size:10.5px; }
+  .preview-files { padding:9px 13px; border-top:1px solid var(--line); color:var(--muted); font-size:11.5px; }
+  .preview-diff { max-height:360px; margin:0; padding:12px 13px; overflow:auto; border-top:1px solid var(--line); background:var(--bg); white-space:pre; font:11.5px/1.55 ui-monospace,"SF Mono",Menlo,monospace; }
+  .preview-blocked { padding:10px 13px; border-top:1px solid var(--line); color:var(--danger); font-size:11.5px; }
+  .preview-actions { display:flex; justify-content:flex-end; gap:8px; padding:10px 13px; border-top:1px solid var(--line); }
+  .preview-button { border:1px solid var(--line); background:var(--panel); border-radius:8px; padding:6px 10px; cursor:pointer; font-size:11.5px; }
+  .preview-button.primary { border-color:var(--text); background:var(--text); color:var(--panel); }
+  .preview-button.danger { color:var(--danger); }
+  .preview-button:disabled { opacity:.5; cursor:wait; }
 
   .composer-wrap { padding:12px max(18px,6%); border-top:1px solid var(--line); background:color-mix(in srgb,var(--panel) 94%,var(--bg)); }
   .composer { max-width:900px; margin:auto; border:1px solid var(--line); background:var(--panel); border-radius:13px; padding:10px; box-shadow:0 5px 18px rgba(15,23,42,.06); }
@@ -263,10 +276,10 @@ function saveConversation() {
 
 function setRuntime(runtime) {
   state.runtimeStatus = runtime;
-  const codexOk = runtime.codex_available && runtime.logged_in;
+  const codexOk = runtime.codex_available && runtime.logged_in && runtime.codex_compatible !== false;
   const claudeOk = runtime.claude_available && runtime.claude_logged_in;
   const ok = codexOk && claudeOk;
-  const codexText = codexOk ? "Codex 已登录" : (runtime.codex_available ? "Codex 未登录" : "未安装 Codex");
+  const codexText = codexOk ? "Codex 已登录" : (runtime.codex_update_required ? "Codex 需要更新" : (runtime.codex_available ? "Codex 未登录" : "未安装 Codex"));
   const claudeText = claudeOk ? "Claude 已登录" : (runtime.claude_available ? "Claude 未登录" : "未安装 Claude");
   $("#runtimeDot").className = `dot ${ok ? "ok" : "bad"}`;
   $("#runtime").textContent = `${codexText} · ${claudeText}`;
@@ -275,9 +288,9 @@ function setRuntime(runtime) {
   loginButton.disabled = state.authPolling;
   loginButton.textContent = state.authPolling ? "等待登录…" : "登录 Claude（订阅）";
   const writeOption = $("#sandbox").querySelector('option[value="workspace-write"]');
-  const writeEnabled = runtime.max_sandbox === "workspace-write";
+  const writeEnabled = runtime.safe_write_preview || runtime.max_sandbox === "workspace-write";
   writeOption.disabled = !writeEnabled;
-  writeOption.textContent = writeEnabled ? "允许修改项目文件" : "允许修改项目文件（服务未启用）";
+  writeOption.textContent = writeEnabled ? "允许修改（先预览 Diff）" : "允许修改项目文件（服务未启用）";
   if (!writeEnabled && $("#sandbox").value === "workspace-write") $("#sandbox").value = "read-only";
   state.maxConcurrentTasks = runtime.max_concurrent_tasks || 1;
   $("#concurrency").value = String(state.maxConcurrentTasks);
@@ -383,10 +396,69 @@ function renderSkills() {
 
 function updateContext() {
   const skill = state.selectedSkill ? `优先使用 ${state.selectedSkill}` : "自动选择 SEO 技能";
-  const permission = $("#sandbox").value === "workspace-write" ? "允许修改项目文件" : "当前仅分析，不修改文件";
+  const permission = $("#sandbox").value === "workspace-write" ? "修改先预览，确认后写入" : "当前仅分析，不修改文件";
   const speed = state.responseMode === "fast" ? "速度优先" : "质量优先";
   $("#context").textContent = `${providerName()} 执行 · ${speed} · ${skill} · ${permission} · 最多 ${state.maxConcurrentTasks} 个并行任务`;
   $("#threadLabel").textContent = state.sessionId ? `会话 ${state.sessionId.slice(8, 16)}…` : "新会话";
+}
+
+function previewStatusLabel(status) {
+  return ({
+    pending: "等待确认", applied: "已应用", undone: "已撤销",
+    discarded: "已放弃", empty: "没有文件变化", blocked: "已阻止",
+    editing: "生成中"
+  })[status] || status;
+}
+
+function renderWritePreview(preview) {
+  const files = (preview.files || []).map(file => `${file.kind === "added" ? "新增" : file.kind === "deleted" ? "删除" : "修改"}：${file.path}`);
+  const blocked = (preview.blocked || []).map(item => `<div>${escapeHtml(item)}</div>`).join("");
+  let actions = "";
+  if (preview.status === "pending") {
+    actions = `<button class="preview-button danger" data-preview-action="discard" data-preview-id="${escapeHtml(preview.preview_id)}">放弃修改</button>
+      <button class="preview-button primary" data-preview-action="apply" data-preview-id="${escapeHtml(preview.preview_id)}">确认应用修改</button>`;
+  } else if (preview.status === "applied") {
+    actions = `<button class="preview-button" data-preview-action="undo" data-preview-id="${escapeHtml(preview.preview_id)}">撤销本次修改</button>`;
+  }
+  return `<section class="write-preview">
+    <div class="preview-head"><div><strong>文件修改预览</strong><span>原项目尚未修改；确认后才会写入，并自动保留备份。</span></div><div class="preview-status">${escapeHtml(previewStatusLabel(preview.status))}</div></div>
+    <div class="preview-files">${files.length ? files.map(escapeHtml).join("<br>") : "未检测到文件变化"}</div>
+    ${preview.diff ? `<pre class="preview-diff">${escapeHtml(preview.diff)}</pre>` : ""}
+    ${blocked ? `<div class="preview-blocked">${blocked}</div>` : ""}
+    ${actions ? `<div class="preview-actions">${actions}</div>` : ""}
+  </section>`;
+}
+
+function bindPreviewActions() {
+  document.querySelectorAll("[data-preview-action]").forEach(button => {
+    button.onclick = () => updateWritePreview(button.dataset.previewId, button.dataset.previewAction, button);
+  });
+}
+
+async function updateWritePreview(previewId, action, button) {
+  const prompts = {
+    apply: "确认把 Diff 中的修改写入原项目吗？工作台会先自动备份。",
+    undo: "确认撤销本次已应用的文件修改吗？之后的同文件改动不会被覆盖。"
+  };
+  if (prompts[action] && !confirm(prompts[action])) return;
+  button.disabled = true;
+  try {
+    const response = await fetch(`/api/write-previews/${encodeURIComponent(previewId)}/${action}`, {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = typeof body.error === "object" ? body.error.message : body.error;
+      throw new Error(message || `修改预览操作失败：${response.status}`);
+    }
+    const message = state.messages.find(item => item.preview && item.preview.preview_id === previewId);
+    if (message) message.preview = body.preview;
+    saveConversation();
+    renderMessages();
+  } catch (error) {
+    button.disabled = false;
+    addMessage("assistant", `文件修改没有执行：${error.message}`, {error: true, provider: "系统"});
+  }
 }
 
 function renderMessages() {
@@ -400,8 +472,10 @@ function renderMessages() {
       <div class="avatar">${message.role === "user" ? "你" : "AI"}</div>
       <div><div class="who">${message.role === "user" ? "你" : escapeHtml(message.provider || "AI")}</div>
         <div class="bubble ${message.role === "assistant" ? "markdown" : ""} ${message.error ? "error" : ""}">${message.role === "assistant" ? ClaudeSeoMarkdown.render(cleanDisplayedText(message.text)) : escapeHtml(cleanDisplayedText(message.text))}</div>
+        ${message.preview ? renderWritePreview(message.preview) : ""}
       </div>
     </div>`).join("");
+  bindPreviewActions();
   container.scrollTop = container.scrollHeight;
 }
 
@@ -427,6 +501,7 @@ function handleEvent(event, pending, result) {
     const typeMap = {
       "session.bound": "session", "task.started": "task", "task.status": "status",
       "task.activity": "activity", "assistant.message": "assistant",
+      "write.preview": "write_preview",
       "task.warning": "warning", "task.failed": "error",
       "task.cancelled": "cancelled", "task.completed": "completed"
     };
@@ -453,6 +528,8 @@ function handleEvent(event, pending, result) {
     bubble.classList.add("markdown");
     bubble.innerHTML = ClaudeSeoMarkdown.render(cleanDisplayedText(result.text));
     $("#messages").scrollTop = $("#messages").scrollHeight;
+  } else if (event.type === "write_preview") {
+    result.preview = event;
   } else if (event.type === "warning") {
     pending.querySelector(".warning").textContent = event.message;
   } else if (event.type === "error") {
@@ -489,6 +566,8 @@ async function sendMessage(prefill) {
     const provider = providerName();
     const guidance = provider === "Claude"
       ? "请点击页面顶部“登录 Claude（订阅）”，并在 Claude 官方页面完成登录。"
+      : state.runtimeStatus.codex_update_required
+        ? "当前 Codex CLI 版本过旧，请先在终端运行 `codex update`，然后刷新页面。"
       : `请先运行 \`${providerLoginCommand()}\`，完成登录后刷新页面。`;
     addMessage("assistant", `${provider} 尚未登录。${guidance}`, {error: true, provider});
     return;
@@ -501,7 +580,7 @@ async function sendMessage(prefill) {
   addMessage("user", message);
   $("#prompt").value = "";
   const pending = createPending(provider);
-  const result = {text: "", error: "", cancelled: false};
+  const result = {text: "", error: "", cancelled: false, preview: null};
 
   try {
     const response = await fetch("/api/v1/chat", {
@@ -543,7 +622,7 @@ async function sendMessage(prefill) {
     addMessage(
       "assistant",
       result.cancelled ? "任务已取消。" : (result.error || result.text || `任务已结束，但 ${provider} 没有返回文字结果。`),
-      {error: Boolean(result.error), provider}
+      {error: Boolean(result.error), provider, preview: result.preview}
     );
     state.running = false;
     state.activeTaskId = "";

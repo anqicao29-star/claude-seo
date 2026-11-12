@@ -10,6 +10,7 @@ from __future__ import annotations
 import http.client
 import importlib.util
 import json
+import tempfile
 import threading
 import unittest
 from pathlib import Path
@@ -26,6 +27,7 @@ SERVER_SPEC.loader.exec_module(server)
 from workbench.runtime import RuntimeEvent, RuntimeStatus  # noqa: E402
 from workbench.sessions import SessionManager  # noqa: E402
 from workbench.tasks import TaskManager  # noqa: E402
+from workbench.write_previews import WritePreviewManager  # noqa: E402
 
 
 class FakeRuntimeSession:
@@ -85,6 +87,12 @@ class FakeRuntime:
         self.request = request
         self.started.set()
         return self.session
+
+
+class WritingFakeRuntime(FakeRuntime):
+    def start(self, request):
+        (request.workspace / "article.md").write_text("updated\n", encoding="utf-8")
+        return super().start(request)
 
 
 class FakeAuthLauncher:
@@ -152,7 +160,9 @@ class WorkbenchFunctionTests(unittest.TestCase):
         self.assertTrue(result["logged_in"])
         self.assertEqual(result["codex_version"], "codex-cli 1.2.3")
         self.assertEqual(result["login_status"], "Logged in using ChatGPT")
-        self.assertEqual(result["max_sandbox"], server.MAX_SANDBOX)
+        self.assertEqual(result["max_sandbox"], "workspace-write")
+        self.assertTrue(result["safe_write_preview"])
+        self.assertTrue(result["direct_write_disabled"])
         self.assertEqual(result["model"], "test-model")
         self.assertTrue(result["claude_available"])
         self.assertTrue(result["claude_logged_in"])
@@ -178,6 +188,28 @@ class WorkbenchFunctionTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(runtime.status_calls, 1)
         self.assertEqual(claude_runtime.status_calls, 1)
+
+    def test_api_runtime_requests_codex_update_for_old_gpt_6_1_cli(self):
+        runtime = FakeRuntime(
+            status=RuntimeStatus(
+                available=True,
+                version="codex-cli 0.142.4",
+                authenticated=True,
+                authentication_status="Logged in using ChatGPT",
+                model="gpt-6.1-sol",
+            )
+        )
+        claude_runtime = FakeRuntime()
+        with (
+            patch.object(server, "RUNTIME", runtime),
+            patch.object(server, "CLAUDE_RUNTIME", claude_runtime),
+            patch.object(server, "CODEX_MODEL", "gpt-6.1-sol"),
+        ):
+            server.invalidate_runtime_status_cache()
+            result = server.api_runtime(force_refresh=True)
+
+        self.assertFalse(result["codex_compatible"])
+        self.assertTrue(result["codex_update_required"])
 
     def test_runtime_cache_invalidation_forces_fresh_status(self):
         runtime = FakeRuntime()
@@ -318,18 +350,83 @@ class WorkbenchHttpTests(unittest.TestCase):
         self.assertEqual(status, 403)
         self.assert_api_error(body, server.ErrorCode.HOST_DENIED, "拒绝非本机请求")
 
-    def test_chat_defaults_to_read_only_server_policy(self):
-        with patch.object(server, "MAX_SANDBOX", "read-only"):
-            status, _, body = self.post_json(
-                {"message": "test", "sandbox": "workspace-write"}
+    def test_workspace_write_runs_in_isolated_preview(self):
+        runtime = FakeRuntime(
+            session=FakeRuntimeSession(
+                events=[RuntimeEvent("assistant", {"text": "已处理"})]
             )
-
-        self.assertEqual(status, 403)
-        self.assert_api_error(
-            body,
-            server.ErrorCode.MODE_DENIED,
-            "服务当前仅允许只读任务",
         )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            target = workspace / "article.md"
+            target.write_text("original\n", encoding="utf-8")
+            manager = WritePreviewManager(root / "cache")
+            with (
+                patch.object(server, "PROJECT_DIR", workspace),
+                patch.object(server, "WRITE_PREVIEWS", manager),
+                patch.object(server, "RUNTIME", runtime),
+            ):
+                status, _, body = self.post_v1(
+                    {"message": "修改文章", "sandbox": "workspace-write"}
+                )
+            original_text = target.read_text(encoding="utf-8")
+
+        self.assertEqual(status, 200)
+        events = [json.loads(line) for line in body.decode("utf-8").splitlines()]
+        preview_event = next(event for event in events if event["type"] == "write.preview")
+        self.assertEqual(preview_event["data"]["status"], "empty")
+        self.assertNotEqual(runtime.request.workspace, workspace)
+        self.assertEqual(original_text, "original\n")
+        self.assertIn("隔离的写入预览副本", runtime.request.prompt)
+
+    def test_write_preview_http_apply_and_undo(self):
+        runtime = WritingFakeRuntime(
+            session=FakeRuntimeSession(
+                events=[RuntimeEvent("assistant", {"text": "已修改"})]
+            )
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            target = workspace / "article.md"
+            target.write_text("original\n", encoding="utf-8")
+            manager = WritePreviewManager(root / "cache")
+            with (
+                patch.object(server, "PROJECT_DIR", workspace),
+                patch.object(server, "WRITE_PREVIEWS", manager),
+                patch.object(server, "RUNTIME", runtime),
+            ):
+                status, _, body = self.post_v1(
+                    {"message": "修改文章", "sandbox": "workspace-write"}
+                )
+                events = [json.loads(line) for line in body.decode("utf-8").splitlines()]
+                preview = next(event["data"] for event in events if event["type"] == "write.preview")
+                self.assertEqual(status, 200)
+                self.assertEqual(preview["status"], "pending")
+                self.assertEqual(target.read_text(encoding="utf-8"), "original\n")
+
+                apply_status, _, apply_body = self.request(
+                    "POST",
+                    f"/api/write-previews/{preview['preview_id']}/apply",
+                    body=b"{}",
+                    headers={"Content-Type": "application/json"},
+                )
+                self.assertEqual(apply_status, 200)
+                self.assertEqual(json.loads(apply_body)["preview"]["status"], "applied")
+                self.assertEqual(target.read_text(encoding="utf-8"), "updated\n")
+
+                undo_status, _, undo_body = self.request(
+                    "POST",
+                    f"/api/write-previews/{preview['preview_id']}/undo",
+                    body=b"{}",
+                    headers={"Content-Type": "application/json"},
+                )
+                self.assertEqual(undo_status, 200)
+                self.assertEqual(json.loads(undo_body)["preview"]["status"], "undone")
+                self.assertEqual(target.read_text(encoding="utf-8"), "original\n")
 
     def test_runtime_settings_update_concurrency_limit(self):
         status, _, body = self.request(

@@ -15,6 +15,7 @@ EVENT_TYPES = {
     "task.status",
     "task.activity",
     "assistant.message",
+    "write.preview",
     "task.warning",
     "task.completed",
     "task.failed",

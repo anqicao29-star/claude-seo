@@ -36,6 +36,14 @@ from workbench.tasks import (
     TaskNotCancellableError,
     TaskNotFoundError,
 )
+from workbench.write_previews import (
+    PreviewError,
+    PreviewConflictError,
+    PreviewNotFoundError,
+    PreviewStateError,
+    PreviewUnsafeError,
+    WritePreviewManager,
+)
 
 
 CONFIG = load_config(Path(__file__))
@@ -54,13 +62,21 @@ MAX_MESSAGE_CHARS = CONFIG.max_message_chars
 MAX_CONCURRENT_TASKS = CONFIG.max_concurrent_tasks
 TASK_TIMEOUT_SECONDS = CONFIG.task_timeout_seconds
 MAX_CONCURRENT_TASKS_LIMIT = 4
+MIN_CODEX_VERSION = (0, 159, 0)
 RUNTIME = CodexCliRuntime(CODEX_BIN, CODEX_MODEL, PROJECT_DIR)
 CLAUDE_RUNTIME = ClaudeCliRuntime(CLAUDE_BIN, CLAUDE_MODEL, PROJECT_DIR)
 CLAUDE_AUTH = ClaudeAuthLauncher(CLAUDE_BIN, PROJECT_DIR)
 TASKS = TaskManager(max_active=MAX_CONCURRENT_TASKS)
 SESSIONS = SessionManager()
+WRITE_PREVIEWS = WritePreviewManager(HOME / ".cache" / "claude-seo" / "write-previews")
 LOCAL_HOST_PATTERN = re.compile(r"\A(?:127\.0\.0\.1|localhost)(?::\d{1,5})?\Z", re.IGNORECASE)
 TASK_CANCEL_PATTERN = re.compile(r"\A/api/tasks/(task_[0-9a-f]{32})/cancel\Z")
+WRITE_PREVIEW_PATTERN = re.compile(
+    r"\A/api/write-previews/(preview_[0-9a-f]{32})\Z"
+)
+WRITE_PREVIEW_ACTION_PATTERN = re.compile(
+    r"\A/api/write-previews/(preview_[0-9a-f]{32})/(apply|discard|undo)\Z"
+)
 SESSION_ID_PATTERN = re.compile(r"\Asession_[0-9a-f]{32}\Z")
 TASK_TYPES = {"general": "codex", "article": "claude"}
 RESPONSE_MODES = {"fast": "low", "quality": "medium"}
@@ -229,12 +245,18 @@ def get_runtime_statuses(force_refresh=False):
 
 def api_runtime(force_refresh=False):
     codex_status, claude_status = get_runtime_statuses(force_refresh)
+    version_match = re.search(r"(\d+)\.(\d+)\.(\d+)", codex_status.version)
+    codex_compatible = True
+    if version_match and CODEX_MODEL.startswith("gpt-6.1"):
+        codex_compatible = tuple(map(int, version_match.groups())) >= MIN_CODEX_VERSION
     return {
         "codex_available": codex_status.available,
         "codex_version": codex_status.version,
         "logged_in": codex_status.authenticated,
         "login_status": codex_status.authentication_status,
         "model": codex_status.model,
+        "codex_compatible": codex_compatible,
+        "codex_update_required": not codex_compatible,
         "claude_available": claude_status.available,
         "claude_version": claude_status.version,
         "claude_logged_in": claude_status.authenticated,
@@ -245,7 +267,9 @@ def api_runtime(force_refresh=False):
             "article": "claude",
         },
         "workspace": str(PROJECT_DIR),
-        "max_sandbox": MAX_SANDBOX,
+        "max_sandbox": "workspace-write",
+        "safe_write_preview": True,
+        "direct_write_disabled": True,
         "max_concurrent_tasks": TASKS.get_max_active(),
         "max_concurrent_tasks_limit": MAX_CONCURRENT_TASKS_LIMIT,
         "task_timeout_seconds": TASK_TIMEOUT_SECONDS,
@@ -267,6 +291,7 @@ def build_prompt(
     is_new_thread,
     task_type="general",
     response_mode="quality",
+    write_preview=False,
 ):
     if not is_new_thread:
         return message
@@ -301,6 +326,12 @@ def build_prompt(
             )
     if skill:
         guidance += f" 用户选择了 {skill}，请优先读取 skills/{skill}/SKILL.md 并遵循其中的工作流。"
+    if write_preview:
+        guidance += (
+            " 当前任务运行在隔离的写入预览副本中。请直接在此副本完成用户要求的文件修改；"
+            "不要修改登录凭据或敏感文件，也不要要求用户在回答文字中再次确认。"
+            "任务结束后，工作台会显示 Diff，只有用户点击确认才会写回原项目。"
+        )
     return f"{guidance}\n\n用户任务：\n{message}"
 
 
@@ -362,7 +393,10 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_api_error(403, ErrorCode.HOST_DENIED, "拒绝非本机请求")
             return
         route = self.path.split("?")[0]
-        if route in ROUTES:
+        preview_match = WRITE_PREVIEW_PATTERN.fullmatch(route)
+        if preview_match is not None:
+            self.handle_write_preview_get(preview_match.group(1))
+        elif route in ROUTES:
             self.send_json(200, ROUTES[route]())
         else:
             super().do_GET()
@@ -373,6 +407,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
         route = self.path.split("?")[0]
         cancel_match = TASK_CANCEL_PATTERN.fullmatch(route)
+        preview_action_match = WRITE_PREVIEW_ACTION_PATTERN.fullmatch(route)
         if (
             route not in (
                 "/api/chat",
@@ -381,6 +416,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "/api/auth/claude/start",
             )
             and cancel_match is None
+            and preview_action_match is None
         ):
             self.send_api_error(404, ErrorCode.ROUTE_NOT_FOUND, "未找到接口")
             return
@@ -395,7 +431,12 @@ class Handler(SimpleHTTPRequestHandler):
         if not self.has_allowed_origin():
             self.send_api_error(403, ErrorCode.ORIGIN_DENIED, "拒绝跨站请求")
             return
-        if cancel_match is not None:
+        if preview_action_match is not None:
+            self.handle_write_preview_action(
+                preview_action_match.group(1),
+                preview_action_match.group(2),
+            )
+        elif cancel_match is not None:
             self.handle_cancel(cancel_match.group(1))
         elif route == "/api/settings/runtime":
             self.handle_runtime_settings()
@@ -495,6 +536,59 @@ class Handler(SimpleHTTPRequestHandler):
             return
         self.send_json(200, {"task": task})
 
+    def handle_write_preview_get(self, preview_id):
+        try:
+            preview = WRITE_PREVIEWS.get(preview_id)
+        except PreviewNotFoundError:
+            self.send_api_error(
+                404,
+                ErrorCode.PREVIEW_NOT_FOUND,
+                "修改预览不存在或已过期",
+            )
+            return
+        self.send_json(200, {"preview": preview})
+
+    def handle_write_preview_action(self, preview_id, action):
+        payload = self.read_json_body()
+        if payload is None:
+            return
+        try:
+            if action == "apply":
+                preview = WRITE_PREVIEWS.apply(preview_id)
+            elif action == "discard":
+                preview = WRITE_PREVIEWS.discard(preview_id)
+            else:
+                preview = WRITE_PREVIEWS.undo(preview_id)
+        except PreviewNotFoundError:
+            self.send_api_error(
+                404,
+                ErrorCode.PREVIEW_NOT_FOUND,
+                "修改预览不存在或已过期",
+            )
+            return
+        except PreviewConflictError as error:
+            self.send_api_error(
+                409,
+                ErrorCode.PREVIEW_CONFLICT,
+                str(error),
+            )
+            return
+        except PreviewStateError as error:
+            self.send_api_error(
+                409,
+                ErrorCode.PREVIEW_INVALID_STATE,
+                str(error),
+            )
+            return
+        except PreviewUnsafeError as error:
+            self.send_api_error(
+                400,
+                ErrorCode.PREVIEW_UNSAFE,
+                str(error),
+            )
+            return
+        self.send_json(200, {"preview": preview})
+
     def handle_chat(self, versioned=False):
         payload = self.read_json_body()
         if payload is None:
@@ -532,9 +626,6 @@ class Handler(SimpleHTTPRequestHandler):
         if response_mode not in RESPONSE_MODES:
             self.send_api_error(400, ErrorCode.INVALID_FIELD, "不支持的响应速度模式")
             return
-        if sandbox == "workspace-write" and MAX_SANDBOX != "workspace-write":
-            self.send_api_error(403, ErrorCode.MODE_DENIED, "服务当前仅允许只读任务")
-            return
         if skill:
             skill_path = PROJECT_DIR / "skills" / skill / "SKILL.md"
             if not re.fullmatch(r"seo(?:-[a-z0-9-]+)?", skill) or not skill_path.is_file():
@@ -561,6 +652,19 @@ class Handler(SimpleHTTPRequestHandler):
             )
             return
 
+        write_preview = None
+        if sandbox == "workspace-write":
+            try:
+                write_preview = WRITE_PREVIEWS.create(task.task_id, PROJECT_DIR)
+            except (OSError, PreviewUnsafeError) as error:
+                TASKS.finish(task.task_id, "failed")
+                self.send_api_error(
+                    400,
+                    ErrorCode.PREVIEW_UNSAFE,
+                    f"无法创建安全写入预览：{error}",
+                )
+                return
+
         self.send_response(200)
         self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
         self.send_header("Cache-Control", "no-cache, no-store")
@@ -577,6 +681,16 @@ class Handler(SimpleHTTPRequestHandler):
         runtime_session = None
         timeout_timer = None
         protocol_stream = EventStream(task.task_id) if versioned else None
+
+        def discard_unfinished_preview():
+            if not write_preview:
+                return
+            try:
+                current = WRITE_PREVIEWS.get(write_preview["preview_id"])
+                if current["status"] == "editing":
+                    WRITE_PREVIEWS.discard(write_preview["preview_id"])
+            except (PreviewNotFoundError, PreviewStateError, OSError):
+                pass
 
         def emit(event):
             data = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
@@ -615,10 +729,16 @@ class Handler(SimpleHTTPRequestHandler):
                         not runtime_thread_id,
                         task_type,
                         response_mode,
+                        write_preview=bool(write_preview),
                     ),
                     thread_id=runtime_thread_id,
                     sandbox=sandbox,
                     effort=RESPONSE_MODES[response_mode],
+                    workspace=(
+                        WRITE_PREVIEWS.workspace(write_preview["preview_id"])
+                        if write_preview
+                        else None
+                    ),
                 )
             )
             TASKS.bind_session(task.task_id, runtime_session)
@@ -679,6 +799,7 @@ class Handler(SimpleHTTPRequestHandler):
 
             return_code = runtime_session.wait()
             if TASKS.is_timeout_requested(task.task_id):
+                discard_unfinished_preview()
                 TASKS.finish(task.task_id, "timed_out")
                 message = f"任务运行超过 {TASK_TIMEOUT_SECONDS} 秒，已自动停止"
                 if versioned:
@@ -689,12 +810,14 @@ class Handler(SimpleHTTPRequestHandler):
                 else:
                     emit({"type": "error", "message": message})
             elif TASKS.is_cancel_requested(task.task_id):
+                discard_unfinished_preview()
                 TASKS.finish(task.task_id, "cancelled")
                 if versioned:
                     emit_v1("task.cancelled", {"reason": "user_requested"})
                 else:
                     emit({"type": "cancelled", "task_id": task.task_id})
             elif return_code != 0 and not emitted_error:
+                discard_unfinished_preview()
                 detail = runtime_session.stderr_tail()
                 TASKS.finish(task.task_id, "failed")
                 runtime_label = "Claude" if runtime_name == "claude" else "Codex"
@@ -707,22 +830,47 @@ class Handler(SimpleHTTPRequestHandler):
                 else:
                     emit({"type": "error", "message": message})
             elif versioned and failure_message:
+                discard_unfinished_preview()
                 TASKS.finish(task.task_id, "failed")
                 emit_v1(
                     "task.failed",
                     {"code": "runtime.task_failed", "message": failure_message},
                 )
             elif emitted_error:
+                discard_unfinished_preview()
                 TASKS.finish(task.task_id, "failed")
             else:
+                if write_preview:
+                    try:
+                        preview_result = WRITE_PREVIEWS.capture(write_preview["preview_id"])
+                    except (PreviewError, OSError) as error:
+                        discard_unfinished_preview()
+                        TASKS.finish(task.task_id, "failed")
+                        if versioned:
+                            emit_v1(
+                                "task.failed",
+                                {
+                                    "code": "write_preview.capture_failed",
+                                    "message": f"无法生成安全修改预览：{error}",
+                                },
+                            )
+                        else:
+                            emit({"type": "error", "message": f"无法生成安全修改预览：{error}"})
+                        return
+                    if versioned:
+                        emit_v1("write.preview", preview_result)
+                    else:
+                        emit({"type": "write_preview", **preview_result})
                 TASKS.finish(task.task_id, "completed")
                 if versioned:
                     emit_v1("task.completed", {"usage": usage})
         except BrokenPipeError:
             if runtime_session:
                 runtime_session.terminate()
+            discard_unfinished_preview()
             TASKS.finish(task.task_id, "cancelled")
         except OSError as error:
+            discard_unfinished_preview()
             TASKS.finish(task.task_id, "failed")
             try:
                 if versioned:

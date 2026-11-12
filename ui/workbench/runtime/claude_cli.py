@@ -178,9 +178,10 @@ class ClaudeCliRuntime(RuntimeAdapter):
         )
 
     def start(self, request: RuntimeRequest) -> RuntimeSession:
+        workspace = request.workspace or self.workspace
         process = subprocess.Popen(
             self.command(request),
-            cwd=self.workspace,
+            cwd=workspace,
             env=os.environ.copy(),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

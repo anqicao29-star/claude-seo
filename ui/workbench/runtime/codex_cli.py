@@ -126,6 +126,7 @@ class CodexCliRuntime(RuntimeAdapter):
         self.workspace = workspace
 
     def command(self, request: RuntimeRequest) -> List[str]:
+        model_args = ["--model", self.model] if self.model else []
         speed_args = (
             ["--ignore-user-config", "--ignore-rules"]
             if request.effort == "low"
@@ -136,8 +137,7 @@ class CodexCliRuntime(RuntimeAdapter):
                 self.executable,
                 "exec",
                 "resume",
-                "--model",
-                self.model,
+                *model_args,
                 "--json",
                 "--skip-git-repo-check",
                 "-c",
@@ -153,8 +153,7 @@ class CodexCliRuntime(RuntimeAdapter):
         return [
             self.executable,
             "exec",
-            "--model",
-            self.model,
+            *model_args,
             "--json",
             "--color",
             "never",
@@ -191,15 +190,16 @@ class CodexCliRuntime(RuntimeAdapter):
             version=version.splitlines()[-1] if version else "未检测到",
             authenticated=login_code == 0,
             authentication_status=login.splitlines()[-1] if login else "未登录",
-            model=self.model,
+            model=self.model or "Codex 默认模型",
         )
 
     def start(self, request: RuntimeRequest) -> RuntimeSession:
         environment = os.environ.copy()
         environment.setdefault("RUST_LOG", "error")
+        workspace = request.workspace or self.workspace
         process = subprocess.Popen(
             self.command(request),
-            cwd=self.workspace,
+            cwd=workspace,
             env=environment,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

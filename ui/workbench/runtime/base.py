@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Iterable
 
 
@@ -13,6 +14,7 @@ class RuntimeRequest:
     thread_id: str = ""
     sandbox: str = "read-only"
     effort: str = "medium"
+    workspace: Path | None = None
 
 
 @dataclass(frozen=True)

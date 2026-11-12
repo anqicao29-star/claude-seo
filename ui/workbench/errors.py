@@ -19,6 +19,10 @@ class ErrorCode:
     TASK_NOT_CANCELLABLE = "task.not_cancellable"
     TASK_CAPACITY = "task.capacity_exceeded"
     TASK_TIMEOUT = "task.timeout"
+    PREVIEW_NOT_FOUND = "write_preview.not_found"
+    PREVIEW_INVALID_STATE = "write_preview.invalid_state"
+    PREVIEW_CONFLICT = "write_preview.conflict"
+    PREVIEW_UNSAFE = "write_preview.unsafe"
 
 
 def error_payload(
