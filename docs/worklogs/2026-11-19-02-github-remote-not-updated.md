@@ -15,6 +15,7 @@
 - GitHub 仓库：https://github.com/anqicao29-star/claude-seo
 - 默认分支：`workbench/main`
 - README：新版已上线
+- 仓库简介：已改为本地 AI SEO 工作台定位，旧社区主页链接已移除
 - 未跟踪的 `assets/branding/`、`docs/research/`、`outputs/` 没有上传
 
 ## 距离封闭测试还有多久
